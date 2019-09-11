@@ -682,8 +682,23 @@ namespace AMR {
     }
 
     // this is a nasty wrapper to better show my attempt during this bug fix
-    void mesh_adapter_t::deref_deactivate_tet_edges(size_t tet_id) {
-        bool made_changes = deactivate_tet_edges(tet_id);
+    void mesh_adapter_t::deref_deactivate_edges(size_t parent_id)
+    {
+        bool made_changes = false;
+
+        /* // this messes up the grid pretty good..
+        // This loops over all children too
+        child_id_list_t children = tet_store.data(parent_id).children;
+        for (size_t i = 0; i < children.size(); i++)
+        {
+            size_t child = children[i];
+            bool t = deactivate_tet_edges(child);
+            if (t) made_changes = true;
+        }
+        */
+
+        made_changes = deactivate_tet_edges(parent_id);
+
         if (made_changes)
         {
             // Set change to be yes
@@ -1218,7 +1233,7 @@ namespace AMR {
                     // "Else
                     else {
                         // Deactivate all points"
-                        deref_deactivate_tet_edges(tet_id);
+                        deref_deactivate_edges(tet_id);
                         trace_out << "giving up on deref decision. deactivate near 2:1 ntd = 1" << std::endl;
                     }
                 }
@@ -1239,7 +1254,7 @@ namespace AMR {
                     // "Else
                     else {
                         // Deactivate all points"
-                        deref_deactivate_tet_edges(tet_id);
+                        deref_deactivate_edges(tet_id);
                         trace_out << "giving up on deref decision. deactivate near 4:2 ntd = 2" << std::endl;
                     }
                 }
@@ -1272,7 +1287,7 @@ namespace AMR {
                         // "Else
                         else {
                             // Deactivate all points"
-                            deref_deactivate_tet_edges(tet_id);
+                            deref_deactivate_edges(tet_id);
                             trace_out << "giving up on deref decision. deactivate near 8:4 ntd = 3" << std::endl;
                         }
 
@@ -1298,7 +1313,7 @@ namespace AMR {
                     // "Else
                     else {
                         // Deactivate all points"
-                        deref_deactivate_tet_edges(tet_id);
+                        deref_deactivate_edges(tet_id);
                         trace_out << "giving up on deref decision. deactivate near 8:4 ntd = 4" << std::endl;
                     }
                 }
@@ -1324,6 +1339,7 @@ namespace AMR {
                 else {
                     trace_out << "giving up with no deref decision" << std::endl;
                     // TODO: shoudl this unmark all?
+                    deref_deactivate_edges(tet_id);
                 }
             }
 
@@ -1341,6 +1357,9 @@ namespace AMR {
     // TODO: document
     void mesh_adapter_t::perform_derefinement()
     {
+        trace_out << "start additional marking call, as refinement may have messed stuff up" << std::endl;
+        mark_derefinement();
+        trace_out << "end additional marking call" << std::endl;
         trace_out << "Perform deref" << std::endl;
 
         // Do derefinements
