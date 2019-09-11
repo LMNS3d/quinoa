@@ -34,6 +34,38 @@ namespace AMR {
                 return tet_store.generate_child_ids(parent_id, count);
             }
 
+            // TODO: where is the right place for this to live?
+            std::unordered_set<size_t> child_exclusive_nodes(tet_store_t& tet_store, size_t tet_id)
+            {
+                std::unordered_set<size_t> non_parent_nodes;
+
+                // array
+                auto parent_tet = tet_store.get(tet_id);
+
+                // convert to set
+                std::unordered_set<size_t> parent_set(begin(parent_tet), end(parent_tet));
+
+                child_id_list_t children = tet_store.data(tet_id).children;
+                for (size_t i = 0; i < children.size(); i++)
+                {
+                    auto child_tet = tet_store.get( children[i] );
+
+                    // Look at nodes, if not present add to set
+                    for (std::size_t j = 0; j < NUM_TET_NODES; j++)
+                    {
+                        auto node = child_tet[j];
+                        if (parent_set.count(node) == 0)
+                        {
+                            non_parent_nodes.insert(node);
+                        }
+                    }
+                }
+
+                trace_out <<" Found " << non_parent_nodes.size() << " non parent nodes " << std::endl;
+                return non_parent_nodes;
+
+            }
+
             /**
              * @brief function to detect when an invalid refinement is
              * invoked
@@ -118,10 +150,15 @@ namespace AMR {
             )
             {
 
-                trace_out << "refine_one_to_two" << std::endl;
                 if (!check_allowed_refinement(tet_store,tet_id)) return;
 
                 tet_t original_tet = tet_store.get(tet_id);
+                trace_out << "refine_one_to_two " << tet_id <<
+                    "(" << original_tet[0] <<
+                    ", " << original_tet[1] <<
+                    ", " << original_tet[2] <<
+                    ", " << original_tet[3] <<
+                    ") along " << edge_node_A_id << "-" << edge_node_B_id << std::endl;
 
                 //coordinate_t original_tet_c = node_connectivity->id_to_coordinate(id);
 
@@ -729,6 +766,7 @@ namespace AMR {
                 Refinement_State& parent = tet_store.data(parent_id);
                 for (auto c : parent.children)
                 {
+                    std::cout << "Erasing " << c << " which has " << tet_store.data(c).children.size() << " children " << std::endl;
                     tet_store.erase(c);
                     //tet_store.deactivate(c);
 
@@ -767,6 +805,7 @@ namespace AMR {
              */
             void derefine_two_to_one(tet_store_t& tet_store, node_connectivity_t&, size_t parent_id)
             {
+                trace_out << "2:1" << std::endl;
                 //if (!check_allowed_derefinement(tet_store,parent_id)) return;
                 delete_intermediates_of_children( tet_store, parent_id);
                 generic_derefine(tet_store,parent_id);
@@ -775,11 +814,12 @@ namespace AMR {
             /**
              * @brief Perform 4->1 derefinement on tet
              *
-             * @param tet_store Tet store to use
+             * @pTerminating loop at iter aram tet_store Tet store to use
              * @param parent_id The id of the parent
              */
             void derefine_four_to_one(tet_store_t& tet_store, node_connectivity_t&, size_t parent_id)
             {
+                trace_out << "4:1" << std::endl;
                 //if (!check_allowed_derefinement(tet_store,parent_id)) return;
                 delete_intermediates_of_children(tet_store, parent_id);
                 generic_derefine(tet_store,parent_id);
@@ -793,6 +833,7 @@ namespace AMR {
              */
             void derefine_eight_to_one(tet_store_t& tet_store, node_connectivity_t&, size_t parent_id)
             {
+                trace_out << "8:1" << std::endl;
                 //if (!check_allowed_derefinement(tet_store,parent_id)) return;
 
                 generic_derefine(tet_store,parent_id);
@@ -820,7 +861,7 @@ namespace AMR {
                 refine_one_to_two( tet_store, node_connectivity, parent_id);
             }
 
-            // TODO: Document This.
+            // TODO: this pick the wrong edges and makes vacuous tets
             void derefine_eight_to_two(tet_store_t& tet_store, node_connectivity_t& node_connectivity, size_t parent_id)
             {
                 //if (!check_allowed_derefinement(tet_store,parent_id)) return;
@@ -830,8 +871,19 @@ namespace AMR {
                 size_t edge_A = 0;
                 size_t edge_B = 0;
 
-                // will have 5 edges set to deref, find the one that's not
-                child_id_list_t children = tet_store.data(parent_id).children;
+                // will have 5 *nodes* in the deref sett, find the one that's
+                // not and split centered around that node
+
+                // TODO: instead of recalculating this we could have stored it earlier
+                // Find the set of nodes which are not in the parent
+                std::unordered_set<size_t> non_parent_nodes = child_exclusive_nodes(tet_store, parent_id);
+                auto children = tet_store.data(parent_id).children;
+
+                // We can use an int instead of set (etc) because there should
+                // only be one
+                int split_center = 0;
+
+                // Look at children
                 for (size_t i = 0; i < children.size(); i++)
                 {
                     // TODO: Is this in element or tet ids?
@@ -839,19 +891,40 @@ namespace AMR {
                     for (size_t k = 0; k < NUM_TET_EDGES; k++)
                     {
                         edge_t edge = edge_list[k];
-                        if (tet_store.edge_store.get(edge).needs_derefining)
+                        // TODO: where do we makr the edges that need to be derefed? parent of child?
+                        if (!tet_store.edge_store.get(edge).needs_derefining)
                         {
-                            continue;
-                        }
-                        else
-                        {
-                            // found the non-deref
-                            edge_A = std::min( edge.first(), edge.second() );
-                            edge_B = std::max( edge.first(), edge.second() );
-                            //std::cout << "A " << edge_A << " B " << edge_B << std::endl;
+                            // Check each node, see if its an intermediate
+                            size_t A = edge.first();
+                            size_t B = edge.second();
+                            trace_out << "Needs deref " << A << " - " << B << std::endl;
+
+                            //if (tet_store.is_intermediate(A))
+                            if (non_parent_nodes.count(A))
+                            {
+                                trace_out << "Split " << A << std::endl;
+                                split_center = A;
+                            }
+
+                            //if (tet_store.is_intermediate(B))
+                            if (non_parent_nodes.count(B))
+                            {
+                                trace_out << "Split " << B << std::endl;
+                                split_center = B;
+                            }
                         }
                     }
                 }
+
+                // find the edge `split_center` is in the middle of
+                auto e = node_connectivity.get(split_center);
+
+                edge_A = e[0];
+                edge_B = e[1];
+
+                trace_out << "Splitting on " << edge_A << "-" << edge_B << " because of " << split_center << std::endl;
+
+                assert(edge_A != edge_B); // covers both == 0 too
 
                 derefine_eight_to_one(tet_store, node_connectivity, parent_id);
                 refine_one_to_two( tet_store, node_connectivity, parent_id, edge_A, edge_B );

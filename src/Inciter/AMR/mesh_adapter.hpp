@@ -77,7 +77,8 @@ namespace AMR {
             void refinement_class_three(size_t tet_id);
 
             void lock_tet_edges(size_t tet_id);
-            void deactivate_tet_edges(size_t tet_id);
+            void deref_deactivate_tet_edges(size_t tet_id);
+            bool deactivate_tet_edges(size_t tet_id);
             bool check_valid_refinement_case(size_t child_id);
 
             void mark_derefinement();

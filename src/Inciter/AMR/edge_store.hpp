@@ -200,6 +200,7 @@ namespace AMR {
                 // cppcheck-suppress assertWithSideEffect
                 assert( exists(key) );
                 get(key).needs_refining = 1;
+                get(key).needs_derefining = 0;
             }
 
             /**

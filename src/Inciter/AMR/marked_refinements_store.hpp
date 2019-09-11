@@ -106,6 +106,7 @@ namespace AMR {
                 else {
                     trace_out << "Adding new marked value " << id << " = " << r << std::endl;
                     marked_refinements.insert( std::pair<size_t, case_t>(id, r));
+                    trace_out << __FILE__ << ":" << __LINE__ << "set state change to true" << std::endl;
                     state_changed = true;
                 }
             }

@@ -186,6 +186,13 @@ namespace AMR {
 
                 insert(id, nodes);
 
+                trace_out << "store tet " << id << " with nodes " <<
+                    nodes[0] << ", " <<
+                    nodes[1] << ", " <<
+                    nodes[2] << ", " <<
+                    nodes[3] << ", " <<
+                    std::endl;
+
                 // Sanity check the storage ids
                 // (this is probably better in a function/2d loop)
                 assert( nodes[0] != nodes[1] );
@@ -469,6 +476,12 @@ namespace AMR {
                     auto t = kv.second;
 
                     if (is_active( element_id )) {
+                        std::cout << "element " << kv.first << " is active so adding " <<
+                            t[0] << ", " <<
+                            t[1] << ", " <<
+                            t[2] << ", " <<
+                            t[3] << ", " <<
+                            std::endl;
                         active_tetinpoel.push_back( t[0] );
                         active_tetinpoel.push_back( t[1] );
                         active_tetinpoel.push_back( t[2] );

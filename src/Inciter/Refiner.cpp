@@ -748,14 +748,36 @@ Refiner::perform()
   for (const auto& [ id, tet ] : m_refiner.tet_store.tets)
     m_oldTets.insert( tet );
 
+  {
+  const auto& x = m_coord[0];
+  const auto& y = m_coord[1];
+  const auto& z = m_coord[2];
+  for (int i = 0; i < x.size(); i++)
+  {
+      std::cout << "pre i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+  }
+  }
+
+
   //auto& tet_store = m_refiner.tet_store;
   //std::cout << "before ref: " << tet_store.marked_refinements.size() << ", " << tet_store.marked_derefinements.size() << ", " << tet_store.size() << ", " << tet_store.get_active_inpoel().size() << '\n';
   m_refiner.perform_refinement();
   //std::cout << "after ref: " << tet_store.marked_refinements.size() << ", " << tet_store.marked_derefinements.size() << ", " << tet_store.size() << ", " << tet_store.get_active_inpoel().size() << '\n';
+  //m_refiner.mark_derefinement();
   m_refiner.perform_derefinement();
   //std::cout << "after deref: " << tet_store.marked_refinements.size() << ", " << tet_store.marked_derefinements.size() << ", " << tet_store.size() << ", " << tet_store.get_active_inpoel().size() << '\n';
 
   updateMesh();
+
+  {
+  const auto& x = m_coord[0];
+  const auto& y = m_coord[1];
+  const auto& z = m_coord[2];
+  for (int i = 0; i < x.size(); i++)
+  {
+      std::cout << "post i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+  }
+  }
 
   if (m_initial) {      // if initial (before t=0) AMR
     auto l = m_ninitref - m_initref.size() + 1;  // num initref steps completed
@@ -930,7 +952,7 @@ Refiner::solution( std::size_t npoin,
 
     // Query current solution
     u = m_scheme.ckLocal< Scheme::solution >( thisIndex );
- 
+
     const auto scheme = g_inputdeck.get< tag::discr, tag::scheme >();
     const auto centering = ctr::Scheme().centering( scheme );
     if (centering == tk::Centering::ELEM) {
@@ -1174,6 +1196,18 @@ Refiner::updateMesh()
 {
   // Get refined mesh connectivity
   const auto& refinpoel = m_refiner.tet_store.get_active_inpoel();
+
+  for (int i = 0; i < refinpoel.size(); i+=4)
+  {
+      std::cout << i/4 << "premap { "<<
+          refinpoel[i] << ", "<<
+          refinpoel[i+1] << ", "<<
+          refinpoel[i+2] << ", "<<
+          refinpoel[i+3] << "}" <<
+          std::endl;
+
+
+  }
   Assert( refinpoel.size()%4 == 0, "Inconsistent refined mesh connectivity" );
   Assert( tk::conforming( m_inpoel, m_coord ),
           "Mesh not conforming after refinement" );
@@ -1198,6 +1232,18 @@ Refiner::updateMesh()
   // Update mesh connectivity from refiner lib, remapping refiner to local ids
   m_inpoel = m_refiner.tet_store.get_active_inpoel();
   tk::remap( m_inpoel, m_lref );
+
+  for (int i = 0; i < refinpoel.size(); i+=4)
+  {
+      std::cout << i/4 << "postmap { "<<
+          m_inpoel[i] << ", "<<
+          m_inpoel[i+1] << ", "<<
+          m_inpoel[i+2] << ", "<<
+          m_inpoel[i+3] << "}" <<
+          std::endl;
+
+
+  }
 
   // Update mesh connectivity with new global node ids
   m_ginpoel = m_inpoel;
@@ -1460,7 +1506,7 @@ Refiner::boundary()
     }
     ++p;
   }
-  m_parent = std::move( parent ); 
+  m_parent = std::move( parent );
 
   //std::cout << thisIndex << " added: " << m_addedTets.size() << '\n';
   //std::cout << thisIndex << " parent: " << m_parent.size() << '\n';
