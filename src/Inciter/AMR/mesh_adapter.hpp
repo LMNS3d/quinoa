@@ -77,6 +77,13 @@ namespace AMR {
             void refinement_class_three(size_t tet_id);
 
             void lock_tet_edges(size_t tet_id);
+
+            void deref_deactivate_points(
+                //size_t parent_id,
+                std::unordered_set<size_t>& derefine_node_set,
+                std::unordered_set<size_t>& non_parent_nodes
+            );
+
             void deref_deactivate_edges(size_t tet_id);
             bool deactivate_tet_edges(size_t tet_id);
             bool check_valid_refinement_case(size_t child_id);

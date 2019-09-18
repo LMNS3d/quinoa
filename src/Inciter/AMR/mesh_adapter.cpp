@@ -681,6 +681,26 @@ namespace AMR {
         }
     }
 
+    void mesh_adapter_t::deref_deactivate_points(
+        //size_t parent_id,
+        std::unordered_set<size_t>& derefine_node_set,
+        std::unordered_set<size_t>& non_parent_nodes)
+    {
+        int original_size = derefine_node_set.size();
+        // Remove non_parent_nodes from derefine_node_set
+        for (auto n : non_parent_nodes)
+        {
+            derefine_node_set.erase(n);
+        }
+        int end_size = derefine_node_set.size();
+
+        if (original_size != end_size) {
+            trace_out << __FILE__ << ":" << __LINE__ << "set state change to true "
+                << std::endl;
+            tet_store.marked_derefinements.get_state_changed() = true;
+        }
+    }
+
     // this is a nasty wrapper to better show my attempt during this bug fix
     void mesh_adapter_t::deref_deactivate_edges(size_t parent_id)
     {
@@ -1121,9 +1141,240 @@ namespace AMR {
         }
     }
 
-
     void mesh_adapter_t::mark_derefinement()
     {
+
+        /// NODAL SCHEME
+
+        // First, convert marked edges to nodes
+        // only holds active nodes?
+        std::unordered_set<size_t> derefine_node_set;
+
+        for (const auto& kv : tet_store.tets)
+        {
+            // For each edge, add it as a node IF:
+                // TODO:
+                // *ANY* linking edge marks them for deref?
+                // or
+                // *ALL* linking edge marks them for deref?
+            size_t tet_id = kv.first;
+            child_id_list_t children = tet_store.data(tet_id).children;
+
+            //edge_list_t edge_list = tet_store.generate_edge_keys(children[i]);
+            //edge_list_t edge_list = tet_store.generate_edge_keys(tet_id);
+
+            std::unordered_set<size_t> non_parent_nodes =
+                refiner.child_exclusive_nodes(tet_store, tet_id);
+
+            trace_out << "Debug non parent nodes " << std::endl;
+            for (auto n : non_parent_nodes)
+            {
+                trace_out << n << " " << std::endl;
+            }
+
+                trace_out << tet_id << " Looping over " << children.size() << "children" << std::endl;
+            for (size_t i = 0; i < children.size(); i++)
+            {
+                edge_list_t edge_list = tet_store.generate_edge_keys(children[i]);
+                for (size_t k = 0; k < NUM_TET_EDGES; k++)
+                {
+                    edge_t edge = edge_list[k];
+                    trace_out << "!! tet edge loop " << edge << std::endl;
+                    if (tet_store.edge_store.get(edge).needs_derefining)
+                    {
+                        trace_out << "!! needs deref " << edge << std::endl;
+                        size_t A = edge.first();
+                        size_t B = edge.second();
+                        if (non_parent_nodes.count(A))
+                        {
+                            trace_out << "Adding A= " << A << std::endl;
+                            derefine_node_set.insert(A);
+                        }
+                        if (non_parent_nodes.count(B)) // both possible true
+                        {
+                            trace_out << "Adding B=" << B << std::endl;
+                            derefine_node_set.insert(B);
+                        }
+                    }
+                }
+            }
+        }
+
+        size_t iter;
+        //Iterate until convergence
+        const size_t max_num_rounds = AMR_MAX_ROUNDS;
+        for (iter = 0; iter < max_num_rounds; iter++)
+        {
+            for (const auto& kv : tet_store.tets)
+            {
+                size_t tet_id = kv.first;
+
+                // Find how many active nodes in this tet are in the
+                // derefine_node_set
+                std::unordered_set<size_t> non_parent_nodes =
+                    refiner.child_exclusive_nodes(tet_store, tet_id);
+
+                child_id_list_t children = tet_store.data(tet_id).children;
+
+                int num_to_derefine = 0;
+                for (auto n : non_parent_nodes)
+                {
+                    if (derefine_node_set.count(n))
+                    {
+                        num_to_derefine++;
+                    }
+                }
+
+                trace_out << "num_to_derefine = " << num_to_derefine << std::endl;
+
+
+                // "If nderefine = 1
+                if (num_to_derefine == 1)
+                {
+                    // If icase = 1:2
+
+                    //if (refinement_case == AMR::Refinement_Case::one_to_two)
+                    if (children.size() == 2)
+                    {
+                        // Accept as 2:1 derefine"
+                        trace_out << "Accept as 2:1" << std::endl;
+                        //refiner.derefine_two_to_one(tet_store, node_connectivity, tet_id);
+                        tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::two_to_one);
+                    }
+                    // "Else
+                    else {
+                        // Deactivate all points"
+                        trace_out << "in size " << derefine_node_set.size() << std::endl;
+                        deref_deactivate_points(derefine_node_set, non_parent_nodes);
+                        trace_out << "out size " << derefine_node_set.size() << std::endl;
+                        trace_out << "giving up on deref decision. deactivate near 2:1 ntd = 1" << std::endl;
+                    }
+                }
+
+
+                // "If nderefine = 2
+                else if (num_to_derefine == 2)
+                {
+                    // If icase = 1:4
+                    //if (refinement_case == AMR::Refinement_Case::one_to_four)
+                    if (children.size() == 4)
+                    {
+                        // Accept as 4:2 derefine"
+                        trace_out << "Accept as 4:2" << std::endl;
+                        //refiner.derefine_four_to_two(tet_store,  node_connectivity, tet_id);
+                        tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::four_to_two);
+                    }
+                    // "Else
+                    else {
+                        // Deactivate all points"
+                        trace_out << "in size " << derefine_node_set.size() << std::endl;
+                        deref_deactivate_points(derefine_node_set, non_parent_nodes);
+                        trace_out << "out size " << derefine_node_set.size() << std::endl;
+                        trace_out << "giving up on deref decision. deactivate near 4:2 ntd = 2" << std::endl;
+                    }
+                }
+
+                // "If nderefine = 3
+                else if (num_to_derefine == 3)
+                {
+                    // If icase = 1:4
+                    //if (refinement_case == AMR::Refinement_Case::one_to_four)
+                    if (children.size() == 4)
+                    {
+                        // Accept as 4:2 derefine"
+                        trace_out << "Accept as 4:1" << std::endl;
+                        //refiner.derefine_four_to_two(tet_store,  node_connectivity, tet_id);
+                        tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::four_to_one);
+                    }
+                    // "Else if icase = 1:8
+                    //else if (refinement_case == AMR::Refinement_Case::one_to_eight)
+                    else if (children.size() == 8)
+                    {
+                        bool same_face = false; // TODO: This
+                        // If inactive points lie on same face
+                        if (same_face == true)
+                        {
+                            // Accept as 8:4 derefinement
+                            trace_out << "Accept as 8:4" << std::endl;
+                            //refiner.derefine_eight_to_four(tet_store,  node_connectivity, tet_id);
+                            tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::eight_to_four);
+                        }
+                        // "Else
+                        else {
+                            // Deactivate all points"
+                            trace_out << "in size " << derefine_node_set.size() << std::endl;
+                            deref_deactivate_points(derefine_node_set, non_parent_nodes);
+                            trace_out << "out size " << derefine_node_set.size() << std::endl;
+                            trace_out << "giving up on deref decision. deactivate near 8:4 ntd = 3" << std::endl;
+                        }
+
+                    }
+                }
+
+                // "If nderefine = 4
+                else if (num_to_derefine == 4)
+                    //else if (children.size() == 4)
+                {
+                    // If inactive points lie on the same face
+                    bool same_face = false; // TODO: This
+                    if (same_face == true)
+                    {
+                        // Deactivate third point of face
+                        // TODO: Deactivate third face
+
+                        // Accept as 8:4 derefinement
+                        trace_out << "Accept as 8:4" << std::endl;
+                        //refiner.derefine_eight_to_four(tet_store,  node_connectivity, tet_id);
+                        tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::eight_to_four);
+                    }
+                    // "Else
+                    else {
+                        // Deactivate all points"
+                        trace_out << "in size " << derefine_node_set.size() << std::endl;
+                        deref_deactivate_points(derefine_node_set, non_parent_nodes);
+                        trace_out << "out size " << derefine_node_set.size() << std::endl;
+                        trace_out << "giving up on deref decision. deactivate near 8:4 ntd = 4" << std::endl;
+                    }
+                }
+
+                // "If nderefine = 5
+                else if (num_to_derefine == 5)
+                {
+                    // Accept as 8:2 derefine"
+                    trace_out << "Accept as 8:2. " << std::endl;
+                    tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::eight_to_two);
+
+                }
+
+                // "If nderefine = 6
+                else if (num_to_derefine == 6)
+                {
+                    // Accept as 8:1 derefine"
+                    trace_out << "Accept as 8:1" << std::endl;
+                    //refiner.derefine_eight_to_one(tet_store,  node_connectivity, tet_id);
+                    tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::eight_to_one);
+                }
+
+                else {
+                    trace_out << "giving up with no deref decision" << std::endl;
+                    // TODO: shoudl this unmark all?
+                    trace_out << "in size " << derefine_node_set.size() << std::endl;
+                    deref_deactivate_points(derefine_node_set, non_parent_nodes);
+                    trace_out << "out size " << derefine_node_set.size() << std::endl;
+                }
+            }
+
+            // If nothing changed during that round, break
+            if (!tet_store.marked_derefinements.get_state_changed())
+            {
+                trace_out << "Terminating loop at iter " << iter << std::endl;
+                break;
+            }
+            trace_out << "End iter " << iter << std::endl;
+        }
+
+
+        /*
         const size_t max_num_rounds = AMR_MAX_ROUNDS;
         trace_out << "going into mark_deref with " << tet_store.marked_derefinements.size() << " decisions already made" << std::endl;
 
@@ -1147,19 +1398,17 @@ namespace AMR {
                 // If your children have children, it would be really bad to
                 // deref you, but for now we let it make the decision in the
                 // hope of some permissive unmarking...
-                /*
-                bool bail_out = false;
-                for (int i = 0; i < children.size(); i++)
-                {
-                    // If they have children, skip
-                    trace_out << "Looking to see if child " << i << " (" << children[i] << ") of " << tet_id << "has children => " << tet_store.data(children[i]).children.size() << std::endl;
-                    if (tet_store.data(children[i]).children.size() > 0)
-                    {
-                        bail_out = true;
-                    }
-                }
+                //bool bail_out = false;
+                //for (int i = 0; i < children.size(); i++)
+                //{
+                    //// If they have children, skip
+                    //trace_out << "Looking to see if child " << i << " (" << children[i] << ") of " << tet_id << "has children => " << tet_store.data(children[i]).children.size() << std::endl;
+                    //if (tet_store.data(children[i]).children.size() > 0)
+                    //{
+                        //bail_out = true;
+                    //}
+                //}
                 if (bail_out) { continue; }
-                */
 
                 // This is useful for later inspection
                 //edge_list_t edge_list = tet_store.generate_edge_keys(tet_id);
@@ -1352,6 +1601,7 @@ namespace AMR {
             trace_out << "End iter " << iter << std::endl;
         }
         trace_out << "Deref Loop took " << iter << " rounds." << std::endl;
+        */
     }
 
     // TODO: document
@@ -1390,6 +1640,7 @@ namespace AMR {
                     // If they have chidren, skip you
                     if (tet_store.data(children[i]).children.size() > 0)
                     {
+                        trace_out << "bail out on tet_id " << tet_id << " who " << i << " child has " << tet_store.data(children[i]).children.size() << std::endl;
                         bail_out = true;
                     }
                 }
