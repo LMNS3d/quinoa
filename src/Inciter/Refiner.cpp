@@ -1197,6 +1197,7 @@ Refiner::updateMesh()
   // Get refined mesh connectivity
   const auto& refinpoel = m_refiner.tet_store.get_active_inpoel();
 
+  /*
   for (int i = 0; i < refinpoel.size(); i+=4)
   {
       std::cout << i/4 << "premap { "<<
@@ -1205,9 +1206,9 @@ Refiner::updateMesh()
           refinpoel[i+2] << ", "<<
           refinpoel[i+3] << "}" <<
           std::endl;
-
-
   }
+  */
+
   Assert( refinpoel.size()%4 == 0, "Inconsistent refined mesh connectivity" );
   Assert( tk::conforming( m_inpoel, m_coord ),
           "Mesh not conforming after refinement" );
@@ -1233,6 +1234,7 @@ Refiner::updateMesh()
   m_inpoel = m_refiner.tet_store.get_active_inpoel();
   tk::remap( m_inpoel, m_lref );
 
+  /*
   for (int i = 0; i < refinpoel.size(); i+=4)
   {
       std::cout << i/4 << "postmap { "<<
@@ -1244,6 +1246,7 @@ Refiner::updateMesh()
 
 
   }
+  */
 
   // Update mesh connectivity with new global node ids
   m_ginpoel = m_inpoel;

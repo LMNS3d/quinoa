@@ -26,6 +26,7 @@ namespace AMR {
         public:
 
             size_t MAX_REFINEMENT_LEVEL = 10;
+            std::unordered_map<size_t, size_t> eight_to_two_map;
 
             // TODO: Document this
             child_id_list_t generate_child_ids( tet_store_t& tet_store, size_t parent_id, size_t count = MAX_CHILDREN)
@@ -881,8 +882,20 @@ namespace AMR {
 
                 // We can use an int instead of set (etc) because there should
                 // only be one
-                int split_center = 0;
+                int split_center = -1;
 
+                auto it = eight_to_two_map.find(parent_id);
+                if (it != eight_to_two_map.end())
+                {
+                    split_center = it->second;
+                    std::cout << parent_id << " Found split center as " << split_center << std::endl;
+                }
+                else {
+                    trace_out << parent_id << " Cant find split center???" << std::endl;
+                }
+                assert(split_center != -1);
+
+                /*
                 // Look at children
                 for (size_t i = 0; i < children.size(); i++)
                 {
@@ -915,6 +928,7 @@ namespace AMR {
                         }
                     }
                 }
+                */
 
                 // find the edge `split_center` is in the middle of
                 auto e = node_connectivity.get(split_center);

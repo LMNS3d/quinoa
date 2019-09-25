@@ -476,12 +476,14 @@ namespace AMR {
                     auto t = kv.second;
 
                     if (is_active( element_id )) {
+                        /*
                         std::cout << "element " << kv.first << " is active so adding " <<
                             t[0] << ", " <<
                             t[1] << ", " <<
                             t[2] << ", " <<
                             t[3] << ", " <<
                             std::endl;
+                        */
                         active_tetinpoel.push_back( t[0] );
                         active_tetinpoel.push_back( t[1] );
                         active_tetinpoel.push_back( t[2] );

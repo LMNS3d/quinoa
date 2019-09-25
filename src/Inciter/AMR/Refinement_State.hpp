@@ -21,7 +21,7 @@ namespace AMR {
         two_to_eight, four_to_eight, none };
 
     enum Derefinement_Case { two_to_one = 0, four_to_one, four_to_two,
-        eight_to_one, eight_to_two, eight_to_four, skip };
+        eight_to_one, eight_to_two, eight_to_four, no_deref };
 
     class Refinement_State {
 
