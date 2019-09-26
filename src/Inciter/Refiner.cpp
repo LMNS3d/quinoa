@@ -1073,7 +1073,7 @@ Refiner::cellsDerefine()
     auto npoin = tk::npoin_in_graph( m_inpoel );
     // Generate edges surrounding points in old mesh
     auto esup = tk::genEsup( m_inpoel, 4 );
-    auto esuel = tk::genEsuel( m_inpoel, 4, esup );
+    auto esupel = tk::genEsupel( m_inpoel, 4, esup );
 
     std::unordered_set< std::size_t > usercells( begin(cells), end(cells) );
 
@@ -1102,8 +1102,8 @@ Refiner::cellsDerefine()
     for (std::size_t e=0; e<m_inpoel.size()/4; ++e) {    // for all cells e
       auto f = usercells.find(e);
       if (f != end(usercells)) {        // if e is on user's lis
-        for (auto s : tk::Around(esuel,e)) {    // for all cells surrounding e
-          deref( s, tagged_edges );
+        for (auto s : tk::Around(esupel,e)) { // for all cells surrounding
+          deref( s, tagged_edges );           // the points of e
         }
         usercells.erase( e );
       }
