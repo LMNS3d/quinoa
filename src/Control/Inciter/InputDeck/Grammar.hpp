@@ -630,12 +630,20 @@ namespace deck {
                                         eq,
                                         param > > > {};
 
-  //! edgelist ... end block
-  struct edgelist :
-         tk::grm::vector< use< kw::amr_edgelist >,
+  //! refedges ... end block
+  struct refedges :
+         tk::grm::vector< use< kw::amr_refedges >,
                           tk::grm::Store_back< tag::amr, tag::edge >,
                           use< kw::end >,
                           tk::grm::check_vector< tag::amr, tag::edge > > {};
+
+  //! derefcells ... end block
+  struct derefcells :
+         tk::grm::vector< use< kw::amr_derefcells >,
+                          tk::grm::Store_back< tag::amr, tag::cell >,
+                          use< kw::end >,
+                          tk::grm::check_vector< tag::amr, tag::cell > > {};
+
 
   //! xminus configuring coordinate-based edge tagging for mesh refinement
   template< typename keyword, typename Tag >
@@ -848,7 +856,8 @@ namespace deck {
            tk::grm::enable_amr, // enable AMR if amr...end block encountered
            tk::grm::block< use< kw::end >,
                            refvars,
-                           edgelist,
+                           refedges,
+                           derefcells,
                            coordref,
                            tk::grm::process<
                              use< kw::amr_initial >,

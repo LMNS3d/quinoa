@@ -220,6 +220,7 @@ Transporter::info()
       m_print.item( "Initial refinement steps", initref.size() );
       m_print.ItemVec< ctr::AMRInitial >( initref );
       m_print.edgeref( g_inputdeck.get< tag::amr, tag::edge >() );
+      m_print.cellderef( g_inputdeck.get< tag::amr, tag::cell >() );
 
       auto rmax =
         std::numeric_limits< kw::amr_xminus::info::expect::type >::max();

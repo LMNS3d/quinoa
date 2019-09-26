@@ -142,6 +142,9 @@ class InciterPrint : public tk::Print {
     //! Print initial mesh refinement edge-node pairs
     void edgeref( const std::vector< std::size_t >& edgenodes );
 
+    //! Print initial mesh derefinement cells
+    void cellderef( const std::vector< std::size_t >& cells );
+
   private:
     //! Return partial differential equation name
     //! \param[in] key Equation key

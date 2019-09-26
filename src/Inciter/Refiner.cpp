@@ -388,13 +388,15 @@ Refiner::refine()
       if (r == ctr::AMRInitialType::UNIFORM)
         uniformRefine();
       else if (r == ctr::AMRInitialType::UNIFORM_DEREFINE)
-        uniformDeRefine();
+        uniformDerefine();
       else if (r == ctr::AMRInitialType::INITIAL_CONDITIONS)
         errorRefine();
       else if (r == ctr::AMRInitialType::COORDINATES)
         coordRefine();
-      else if (r == ctr::AMRInitialType::EDGELIST)
-        edgelistRefine();
+      else if (r == ctr::AMRInitialType::REFEDGES)
+        edgesRefine();
+      else if (r == ctr::AMRInitialType::DEREFCELLS)
+        cellsDerefine();
       else Throw( "Initial AMR type not implemented" );
     }
 
@@ -754,7 +756,7 @@ Refiner::perform()
   const auto& z = m_coord[2];
   for (int i = 0; i < x.size(); i++)
   {
-      std::cout << "pre i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+      //std::cout << "pre i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
   }
   }
 
@@ -775,7 +777,7 @@ Refiner::perform()
   const auto& z = m_coord[2];
   for (int i = 0; i < x.size(); i++)
   {
-      std::cout << "post i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+      //std::cout << "post i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
   }
   }
 
@@ -872,7 +874,7 @@ Refiner::uniformRefine()
 }
 
 void
-Refiner::uniformDeRefine()
+Refiner::uniformDerefine()
 // *****************************************************************************
 // Do uniform mesh derefinement
 // *****************************************************************************
@@ -1011,15 +1013,15 @@ Refiner::errorRefine()
 }
 
 void
-Refiner::edgelistRefine()
+Refiner::edgesRefine()
 // *****************************************************************************
 // Do mesh refinement based on user explicitly tagging edges
 // *****************************************************************************
 {
   // Get user-defined node-pairs (edges) to tag for refinement
-  const auto& edgenodelist = g_inputdeck.get< tag::amr, tag::edge >();
+  const auto& edgenodes = g_inputdeck.get< tag::amr, tag::edge >();
 
-  if (!edgenodelist.empty()) {  // if user explicitly tagged edges
+  if (!edgenodes.empty()) {  // if user explicitly tagged edges
     // Find number of nodes in old mesh
     auto npoin = tk::npoin_in_graph( m_inpoel );
     // Generate edges surrounding points in old mesh
@@ -1027,8 +1029,8 @@ Refiner::edgelistRefine()
     auto psup = tk::genPsup( m_inpoel, 4, esup );
 
     EdgeSet useredges;
-    for (std::size_t i=0; i<edgenodelist.size()/2; ++i)
-      useredges.insert( {{ {edgenodelist[i*2+0], edgenodelist[i*2+1]} }} );
+    for (std::size_t i=0; i<edgenodes.size()/2; ++i)
+      useredges.insert( {{ {edgenodes[i*2+0], edgenodes[i*2+1]} }} );
 
     using AMR::edge_t;
     using AMR::edge_tag;
@@ -1047,6 +1049,69 @@ Refiner::edgelistRefine()
       }
 
     // Do error-based refinement
+    m_refiner.mark_error_refinement( tagged_edges );
+
+    // Update our extra-edge store based on refiner
+    updateEdgeData();
+
+    // Set number of extra edges to a nonzero number, triggering correction
+    m_extra = 1;
+  }
+}
+
+void
+Refiner::cellsDerefine()
+// *****************************************************************************
+// Do mesh derefinement based on user explicitly tagging cells
+// *****************************************************************************
+{
+  // Get user-defined node-pairs (edges) to tag for refinement
+  const auto& cells = g_inputdeck.get< tag::amr, tag::cell >();
+
+  if (!cells.empty()) {  // if user explicitly tagged cells for derefinement
+    // Find number of nodes in old mesh
+    auto npoin = tk::npoin_in_graph( m_inpoel );
+    // Generate edges surrounding points in old mesh
+    auto esup = tk::genEsup( m_inpoel, 4 );
+    auto esuel = tk::genEsuel( m_inpoel, 4, esup );
+
+    std::unordered_set< std::size_t > usercells( begin(cells), end(cells) );
+
+    using AMR::edge_t;
+    using AMR::edge_tag;
+
+    // Lambda to tag all edges of a tet element for derefinement
+    auto deref = [&]( std::size_t e,
+                      std::vector< std::pair< edge_t, edge_tag > >& edges )
+    {
+      auto A = m_rid[ m_inpoel[e*4+0] ];
+      auto B = m_rid[ m_inpoel[e*4+1] ];
+      auto C = m_rid[ m_inpoel[e*4+2] ];
+      auto D = m_rid[ m_inpoel[e*4+3] ];
+      // tag all edges of tet
+      edges.push_back( { edge_t(A,B), edge_tag::DEREFINE } );
+      edges.push_back( { edge_t(B,C), edge_tag::DEREFINE } );
+      edges.push_back( { edge_t(A,C), edge_tag::DEREFINE } );
+      edges.push_back( { edge_t(A,D), edge_tag::DEREFINE } );
+      edges.push_back( { edge_t(B,D), edge_tag::DEREFINE } );
+      edges.push_back( { edge_t(C,D), edge_tag::DEREFINE } );
+    };
+
+    // Tag edges the user configured
+    std::vector< std::pair< edge_t, edge_tag > > tagged_edges;
+    for (std::size_t e=0; e<m_inpoel.size()/4; ++e) {    // for all cells e
+      auto f = usercells.find(e);
+      if (f != end(usercells)) {        // if e is on user's lis
+        for (auto s : tk::Around(esuel,e)) {    // for all cells surrounding e
+          deref( s, tagged_edges );
+        }
+        usercells.erase( e );
+      }
+    }
+
+    std::cout << "deref: " << tagged_edges.size() << '\n';
+
+    // Derefine tagged edges
     m_refiner.mark_error_refinement( tagged_edges );
 
     // Update our extra-edge store based on refiner

@@ -5035,7 +5035,7 @@ struct amr_refvar_info {
 };
 using amr_refvar = keyword< amr_refvar_info, TAOCPP_PEGTL_STRING("refvar") >;
 
-struct amr_edgelist_info {
+struct amr_refedges_info {
   using code = Code< e >;
   static std::string name() { return "initial refinement edge-nodes"; }
   static std::string shortDescription() { return
@@ -5043,7 +5043,7 @@ struct amr_edgelist_info {
   static std::string longDescription() { return
     R"(This keyword can be used to configure a list of edges that are explicitly
     tagged for initial refinement during setup in inciter. The keyword
-    introduces an edgelist ... end block within an amr ... end block and must
+    introduces an refedges ... end block within an amr ... end block and must
     contain a list of integer pairs, i.e., the number of ids must be even,
     denoting the end-points of the nodes (=edge) which should be tagged for
     refinement.)"; }
@@ -5053,8 +5053,28 @@ struct amr_edgelist_info {
     static std::string description() { return "two ints"; }
   };
 };
-using amr_edgelist =
-  keyword< amr_edgelist_info, TAOCPP_PEGTL_STRING("edgelist") >;
+using amr_refedges =
+  keyword< amr_refedges_info, TAOCPP_PEGTL_STRING("refedges") >;
+
+struct amr_derefcells_info {
+  using code = Code< d >;
+  static std::string name() { return "initial derefinement cells"; }
+  static std::string shortDescription() { return
+    "Configure all edges of a cell for initial derefinement"; }
+  static std::string longDescription() { return
+    R"(This keyword can be used to configure a list of cells that are explicitly
+    tagged for initial derefinement during setup in inciter. The keyword
+    introduces an derefcells ... end block within an amr ... end block and must
+    contain a list of integers, denoting the cell ids which should be tagged for
+    derefinement.)"; }
+  struct expect {
+    using type = std::size_t;
+    static constexpr type lower = 0;
+    static std::string description() { return "integer"; }
+  };
+};
+using amr_derefcells =
+  keyword< amr_derefcells_info, TAOCPP_PEGTL_STRING("derefcells") >;
 
 struct amr_coordref_info {
   static std::string name() {
@@ -5369,7 +5389,8 @@ struct amr_info {
     + amr_tolderef::string() + "\' | \'"
     + amr_error::string() + "\' | \'"
     + amr_coordref::string() + "\' | \'"
-    + amr_edgelist::string() + "\'.";
+    + amr_refedges::string() + "\' | \'"
+    + amr_derefcells::string() + "\'.";
   }
 };
 using amr = keyword< amr_info, TAOCPP_PEGTL_STRING("amr") >;

@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#define ENABLE_TRACE 1
+//#define ENABLE_TRACE 1
 
 #ifdef ENABLE_TRACE
 #define trace_out std::cout << "__TRACE: "

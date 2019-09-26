@@ -223,6 +223,7 @@ struct velocity_id {};
 struct dissipation_id {};
 struct mixmassfracbeta_id {};
 struct edge {};
+struct cell {};
 struct cv {};
 struct k {};
 struct com {};

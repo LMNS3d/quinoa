@@ -26,7 +26,8 @@ namespace ctr {
 enum class AMRInitialType : uint8_t { UNIFORM
                                     , UNIFORM_DEREFINE
                                     , INITIAL_CONDITIONS
-                                    , EDGELIST
+                                    , REFEDGES
+                                    , DEREFCELLS
                                     , COORDINATES };
 
 //! Pack/Unpack AMRInitialType: forward overload to generic enum class packer
@@ -41,7 +42,7 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
     using keywords = brigand::list< kw::amr_uniform
                                   , kw::amr_uniform_derefine
                                   , kw::amr_initial_conditions
-                                  , kw::amr_edgelist
+                                  , kw::amr_refedges
                                   , kw::amr_coords >;
 
     //! \brief Options constructor
@@ -57,7 +58,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
             kw::amr_uniform_derefine::name() },
           { AMRInitialType::INITIAL_CONDITIONS,
             kw::amr_initial_conditions::name() },
-          { AMRInitialType::EDGELIST, kw::amr_edgelist::name() },
+          { AMRInitialType::REFEDGES, kw::amr_refedges::name() },
+          { AMRInitialType::DEREFCELLS, kw::amr_derefcells::name() },
           { AMRInitialType::COORDINATES, kw::amr_coords::name() } },
         //! keywords -> Enums
         { { kw::amr_uniform::string(), AMRInitialType::UNIFORM },
@@ -65,7 +67,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
             AMRInitialType::UNIFORM_DEREFINE },
           { kw::amr_initial_conditions::string(),
             AMRInitialType::INITIAL_CONDITIONS },
-          { kw::amr_edgelist::string(), AMRInitialType::EDGELIST },
+          { kw::amr_refedges::string(), AMRInitialType::REFEDGES },
+          { kw::amr_derefcells::string(), AMRInitialType::DEREFCELLS },
           { kw::amr_coords::string(), AMRInitialType::COORDINATES } } )
     {
        brigand::for_each< keywords >( assertPolicyCodes() );
@@ -100,7 +103,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
       , { AMRInitialType::UNIFORM_DEREFINE, *kw::amr_uniform_derefine::code() }
       , { AMRInitialType::INITIAL_CONDITIONS,
           *kw::amr_initial_conditions::code() }
-      , { AMRInitialType::EDGELIST, *kw::amr_edgelist::code() }
+      , { AMRInitialType::REFEDGES, *kw::amr_refedges::code() }
+      , { AMRInitialType::DEREFCELLS, *kw::amr_derefcells::code() }
       , { AMRInitialType::COORDINATES, *kw::amr_coords::code() }
     };
 };

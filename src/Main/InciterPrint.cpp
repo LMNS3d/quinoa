@@ -94,7 +94,21 @@ void InciterPrint::edgeref( const std::vector< std::size_t >& edgenodes )
 
    std::string c;
    for (auto i : edgenodes) c += std::to_string(i) + ' ';
-   auto name = kw::amr_edgelist::name();
+   auto name = kw::amr_refedges::name();
+   name[0] = static_cast< char >( std::toupper( name[0] ) );
+   item( name, c );
+}
+
+void InciterPrint::cellderef( const std::vector< std::size_t >& cells )
+// *****************************************************************************
+// Print initial mesh derefinement cells
+// *****************************************************************************
+{
+   if (cells.empty()) return;
+
+   std::string c;
+   for (auto i : cells) c += std::to_string(i) + ' ';
+   auto name = kw::amr_derefcells::name();
    name[0] = static_cast< char >( std::toupper( name[0] ) );
    item( name, c );
 }

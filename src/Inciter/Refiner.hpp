@@ -300,7 +300,7 @@ class Refiner : public CBase_Refiner {
     void uniformRefine();
 
     //! Do uniform mesh derefinement
-    void uniformDeRefine();
+    void uniformDerefine();
 
     //! Do error-based mesh refinement
     void errorRefine();
@@ -319,7 +319,10 @@ class Refiner : public CBase_Refiner {
                                std::vector< std::size_t > >& esup ) const;
 
     //! Do mesh refinement based on user explicitly tagging edges
-    void edgelistRefine();
+    void edgesRefine();
+
+    //! Do mesh derefinement based on user explicitly tagging cells
+    void cellsDerefine();
 
     //! Do mesh refinement based on tagging edges based on end-point coordinates
     void coordRefine();
