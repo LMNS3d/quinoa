@@ -641,14 +641,34 @@ Refiner::refinementFields() const
     error[e] /= 6.0;    // assign edge-average error to element
   }
 
+  // Lambda to add all children of an element for derefinement for vis.
+  auto deref = [&]( std::size_t e, std::vector< tk::real >& c ) {
+    const auto& tet_store = m_refiner.tet_store;
+      // query number of children of tet
+      auto nc = tet_store.data( e ).children.size();
+      if (nc > 0) {
+        for (decltype(nc) i=0; i<nc; ++i ) {      // for all child tets
+          // get child tet id
+          auto childtet = tet_store.get_child_id( e, i );
+          c[ childtet ] = 1.0;
+        }
+      }
+  };
+
+  // ...
+  std::vector< tk::real > derefcells( m_inpoel.size()/4, 0.0 );
+  const auto& cells = g_inputdeck.get< tag::amr, tag::cell >();
+  for (auto e : cells) deref( e, derefcells );
+
   // Prepare element fields with mesh refinement data
   std::vector< std::string >
-    elemfieldnames{ "refinement level", "cell type", "error" };
+    elemfieldnames{ "refinement level", "cell type", "error", "derefcells" };
   auto& tet_store = m_refiner.tet_store;
   std::vector< std::vector< tk::real > > elemfields{
     tet_store.get_refinement_level_list(),
     tet_store.get_cell_type_list(),
-    error };
+    error,
+    derefcells };
 
   using tuple_t = std::tuple< std::vector< std::string >,
                               std::vector< std::vector< tk::real > >,
@@ -750,15 +770,15 @@ Refiner::perform()
   for (const auto& [ id, tet ] : m_refiner.tet_store.tets)
     m_oldTets.insert( tet );
 
-  {
-  const auto& x = m_coord[0];
-  const auto& y = m_coord[1];
-  const auto& z = m_coord[2];
-  for (int i = 0; i < x.size(); i++)
-  {
-      //std::cout << "pre i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
-  }
-  }
+  //{
+  //const auto& x = m_coord[0];
+  //const auto& y = m_coord[1];
+  //const auto& z = m_coord[2];
+  //for (int i = 0; i < x.size(); i++)
+  //{
+  //    std::cout << "pre i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+  //}
+  //}
 
 
   //auto& tet_store = m_refiner.tet_store;
@@ -771,15 +791,15 @@ Refiner::perform()
 
   updateMesh();
 
-  {
-  const auto& x = m_coord[0];
-  const auto& y = m_coord[1];
-  const auto& z = m_coord[2];
-  for (int i = 0; i < x.size(); i++)
-  {
-      //std::cout << "post i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
-  }
-  }
+  //{
+  //const auto& x = m_coord[0];
+  //const auto& y = m_coord[1];
+  //const auto& z = m_coord[2];
+  //for (int i = 0; i < x.size(); i++)
+  //{
+  //    std::cout << "post i = " << i << " x " << x[i] << " y " << y[i] << " z " << z[i] << std::endl;
+  //}
+  //}
 
   if (m_initial) {      // if initial (before t=0) AMR
     auto l = m_ninitref - m_initref.size() + 1;  // num initref steps completed
@@ -1068,48 +1088,52 @@ Refiner::cellsDerefine()
   // Get user-defined node-pairs (edges) to tag for refinement
   const auto& cells = g_inputdeck.get< tag::amr, tag::cell >();
 
-  if (!cells.empty()) {  // if user explicitly tagged cells for derefinement
-    // Find number of nodes in old mesh
-    auto npoin = tk::npoin_in_graph( m_inpoel );
-    // Generate edges surrounding points in old mesh
-    auto esup = tk::genEsup( m_inpoel, 4 );
-    auto esupel = tk::genEsupel( m_inpoel, 4, esup );
+  // if user explicitly tagged cells for derefinement and there is an old mesh
+  if (!cells.empty()) {
+    // // Find number of nodes in old mesh
+    // auto npoin = tk::npoin_in_graph( m_inpoel );
+    // // Generate edges surrounding points in old mesh
+    // auto esup = tk::genEsup( m_inpoel, 4 );
+    // auto esupel = tk::genEsupel( m_inpoel, 4, esup );
 
     std::unordered_set< std::size_t > usercells( begin(cells), end(cells) );
 
     using AMR::edge_t;
     using AMR::edge_tag;
 
-    // Lambda to tag all edges of a tet element for derefinement
+    // Lambda to tag all edges of all children of an element for derefinement
     auto deref = [&]( std::size_t e,
                       std::vector< std::pair< edge_t, edge_tag > >& edges )
     {
-      auto A = m_rid[ m_inpoel[e*4+0] ];
-      auto B = m_rid[ m_inpoel[e*4+1] ];
-      auto C = m_rid[ m_inpoel[e*4+2] ];
-      auto D = m_rid[ m_inpoel[e*4+3] ];
-      // tag all edges of tet
-      edges.push_back( { edge_t(A,B), edge_tag::DEREFINE } );
-      edges.push_back( { edge_t(B,C), edge_tag::DEREFINE } );
-      edges.push_back( { edge_t(A,C), edge_tag::DEREFINE } );
-      edges.push_back( { edge_t(A,D), edge_tag::DEREFINE } );
-      edges.push_back( { edge_t(B,D), edge_tag::DEREFINE } );
-      edges.push_back( { edge_t(C,D), edge_tag::DEREFINE } );
+      const auto& tet_store = m_refiner.tet_store;
+      // query number of children of tet
+      auto nc = tet_store.data( e ).children.size();
+      if (nc > 0) {
+        //std::cout << "nc: " << nc << '\n';
+        for (decltype(nc) i=0; i<nc; ++i ) {      // for all child tets
+          // get child tet id
+          auto childtet = tet_store.get_child_id( e, i );
+          auto ct = tet_store.tets.find( childtet );
+          auto A = ct->second[0];
+          auto B = ct->second[1];
+          auto C = ct->second[2];
+          auto D = ct->second[3];
+          // tag all edges of tet
+          edges.push_back( { edge_t(A,B), edge_tag::DEREFINE } );
+          edges.push_back( { edge_t(B,C), edge_tag::DEREFINE } );
+          edges.push_back( { edge_t(A,C), edge_tag::DEREFINE } );
+          edges.push_back( { edge_t(A,D), edge_tag::DEREFINE } );
+          edges.push_back( { edge_t(B,D), edge_tag::DEREFINE } );
+          edges.push_back( { edge_t(C,D), edge_tag::DEREFINE } );
+        }
+      }
     };
 
     // Tag edges the user configured
     std::vector< std::pair< edge_t, edge_tag > > tagged_edges;
-    for (std::size_t e=0; e<m_inpoel.size()/4; ++e) {    // for all cells e
-      auto f = usercells.find(e);
-      if (f != end(usercells)) {        // if e is on user's lis
-        for (auto s : tk::Around(esupel,e)) { // for all cells surrounding
-          deref( s, tagged_edges );           // the points of e
-        }
-        usercells.erase( e );
-      }
-    }
+    for (auto e : cells) deref( e, tagged_edges );
 
-    std::cout << "deref: " << tagged_edges.size() << '\n';
+    std::cout << "deref edges passed: " << tagged_edges.size() << '\n';
 
     // Derefine tagged edges
     m_refiner.mark_error_refinement( tagged_edges );
