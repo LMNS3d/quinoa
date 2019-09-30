@@ -21,32 +21,8 @@
   #pragma clang diagnostic ignored "-Wdocumentation"
 #endif
 
-namespace AMR {
-
-
-#ifdef ENABLE_NODE_STORE
-    /**
-     * @brief This accepts external coord arrays and allows the node_store to
-     * track the new node positions as they are added
-     *
-     * @param m_x X coodinates
-     * @param m_y Y coodinates
-     * @param m_z Z coodinates
-     * @param graph_size Total number of nodes
-     */
-    // TODO: remove graph size and use m.size()
-    // TODO: remove these pointers
-    //void mesh_adapter_t::init_node_store(coord_type* m_x, coord_type* m_y, coord_type* m_z)
-    //{
-    //    assert( m_x->size() == m_y->size() );
-    //    assert( m_x->size() == m_z->size() );
-
-    //    node_store.set_x(*m_x);
-    //    node_store.set_y(*m_y);
-    //    node_store.set_z(*m_z);
-    //}
-#endif
-
+namespace AMR
+{
     /** @brief Consume an existing mesh, and turn it into the AMRs
      * representations of tets and nodes
      *
@@ -85,7 +61,6 @@ namespace AMR {
     //        }
     //        else
     //        {
-    //            // TODO: Check this won't be overwriting valuable
     //            // information from last iteration
     //            kv.second.needs_refining = 0;
     //        }
@@ -118,7 +93,6 @@ namespace AMR {
         mark_derefinement();
     }
 
-    static int init = 0;
 
     /**
      * @brief For a given set of edges, set their refinement criteria for
@@ -152,9 +126,6 @@ namespace AMR {
            }
          }
 
-         // TODO: remove this debugging hack!
-         //if (init > 2) {   trace_out << "####OVERRIDE" << std::endl; local.needs_derefining = 1; }
-         //init++;
        }
 
        mark_refinement();
@@ -181,7 +152,7 @@ namespace AMR {
      * @param num_locked_edges The number of locked edges
      * @param num_intermediate_edges The number of intermediate edges
      * @param refinement_case The refinement case of the tet
-     * @param normal TODO: Document this!
+     * @param normal: flag marking if tet is 'normal' (per the paper)
      *
      * @return The compatibili4y class of the current scenario
      */
@@ -672,7 +643,11 @@ namespace AMR {
         }
     }
 
-    // TODO: Document this
+    /**
+     * @brief Lock edges of a given tet
+     *
+     * @param tet_id the tet to lock
+     */
     void mesh_adapter_t::lock_tet_edges(size_t tet_id) {
         edge_list_t edge_list = tet_store.generate_edge_keys(tet_id);
         for (size_t k = 0; k < NUM_TET_EDGES; k++)
@@ -686,6 +661,43 @@ namespace AMR {
         }
     }
 
+    /**
+     * @brief Figure out if given set of nodes (point) are on the same face for
+     * a given tet
+     *
+     * @param tet_id The tet to check the nodes against
+     * @param nodes The nodes to check
+     *
+     * @return bool giving yes/no
+     */
+    bool mesh_adapter_t::points_on_same_face(size_t tet_id, std::set<size_t> nodes)
+    {
+        bool same_face = false;
+
+
+        // Go over every face, and see if one face includes all of input `nodes`
+        face_list_t face_list = tet_store.generate_face_lists(tet_id);
+        for (size_t face = 0; face < NUM_TET_FACES; face++)
+        {
+                // Lets copy the nodes we recieved in, so we can safely delete
+                // each time we found them
+                std::set<size_t> nodes_copy(nodes);
+                for (size_t k = 0; k < NUM_FACE_NODES; k++)
+                {
+                    nodes_copy.erase(face_list[face][k]);
+                }
+                if (nodes_copy.size() == 0) {
+                    trace_out << "same face is true " << face << std::endl;
+                    same_face = true;
+                }
+                trace_out << "face " << face << " has " << nodes_copy.size() <<
+                    " left " << std::endl;
+        }
+
+        return same_face;
+
+    }
+
     void mesh_adapter_t::deref_deactivate_points(
         //size_t parent_id,
         std::unordered_set<size_t>& derefine_node_set,
@@ -695,7 +707,11 @@ namespace AMR {
         // Remove non_parent_nodes from derefine_node_set
         for (auto n : non_parent_nodes)
         {
-            derefine_node_set.erase(n);
+            if (derefine_node_set.count(n) > 0)
+            {
+                trace_out << "point Deactivating " << n << std::endl;
+                derefine_node_set.erase(n);
+            }
         }
         int end_size = derefine_node_set.size();
 
@@ -706,12 +722,13 @@ namespace AMR {
         }
     }
 
+    /*
     // this is a nasty wrapper to better show my attempt during this bug fix
     void mesh_adapter_t::deref_deactivate_edges(size_t parent_id)
     {
         bool made_changes = false;
 
-        /* // this messes up the grid pretty good..
+        // this messes up the grid pretty good..
         // This loops over all children too
         child_id_list_t children = tet_store.data(parent_id).children;
         for (size_t i = 0; i < children.size(); i++)
@@ -720,7 +737,6 @@ namespace AMR {
             bool t = deactivate_tet_edges(child);
             if (t) made_changes = true;
         }
-        */
 
         made_changes = deactivate_tet_edges(parent_id);
 
@@ -731,11 +747,20 @@ namespace AMR {
             trace_out << __FILE__ << ":" << __LINE__ << "set state change to true" << std::endl;
         }
     }
+    */
 
-    // TODO: Document this
     // TODO: This has too similar a name to deactivate_tet
     // Returns true if it acffects the underlying state of edges (currently
     // deref only), false if not
+    /**
+     * @brief Deactive *edges* of a given tet. Don't call this in the pointwise
+     * derefine
+     *
+     * @param tet_id The tet to deactive the edges of
+     *
+     * @return bool stating if the deactivating had an affect and changes the
+     * world state
+     */
     bool mesh_adapter_t::deactivate_tet_edges(size_t tet_id) {
         bool made_changes = false;
         edge_list_t edge_list = tet_store.generate_edge_keys(tet_id);
@@ -1015,7 +1040,6 @@ namespace AMR {
         // Deactivate all locked edges"
         for (size_t i = 0; i < children.size(); i++)
         {
-            // TODO: Is this in element or tet ids?
             trace_out << "Checking child " << children[i] << std::endl;
             edge_list_t edge_list = tet_store.generate_edge_keys(children[i]);
             for (size_t k = 0; k < NUM_TET_EDGES; k++)
@@ -1162,11 +1186,6 @@ namespace AMR {
         // Loop over all tets, and build a set of nodes marked for deref
         for (const auto& kv : tet_store.tets)
         {
-            // For each edge, add it as a node IF:
-                // TODO:
-                // *ANY* linking edge marks them for deref?
-                // or
-                // *ALL* linking edge marks them for deref?
              /*
             // Here we do any, and only consider tets later where all edges are
             // marked
@@ -1261,7 +1280,7 @@ namespace AMR {
                             // If it doesnt need deref, ban it and remove it
                             // from the set
                             else {
-                                trace_out << "banning and removing " << this_end << std::endl;
+                                trace_out << "banning and removing " << this_end << " becasue " << edge << std::endl;
                                 banned_node_set.insert(this_end);
                                 derefine_node_set.erase(this_end);
                             }
@@ -1270,6 +1289,11 @@ namespace AMR {
                 }
             } // end children loop
         } //end tet loop
+
+        trace_out << "Final set sizes, derefine_node_set " <<
+            derefine_node_set.size() << " banned " << banned_node_set.size() <<
+            " total " << tet_store.tets.size() <<
+            std::endl;
 
         size_t iter;
         //Iterate until convergence
@@ -1318,7 +1342,7 @@ namespace AMR {
                 // we skip this guy entirely!
                 if (incomplete_mark) {
                     // Unmark all nodes
-                    trace_out << "incomplete marking, deactiving nodes" << std::endl;
+                    trace_out << "incomplete marking, deactiving nodes" << tet_id << std::endl;
                     deref_deactivate_points(derefine_node_set, non_parent_nodes);
                     continue;
                 }
@@ -1328,12 +1352,15 @@ namespace AMR {
 
                 // Find how many active nodes in this tet are in the
                 // derefine_node_set, and track the 1:2 split face
+                std::set<size_t> deref_nodes;
                 int num_to_derefine = 0;
                 int last_no = -1; // this is a nasty hack to track the 8:2 face to split on
                 for (auto n : non_parent_nodes)
                 {
                     if (derefine_node_set.count(n))
                     {
+                        trace_out << tet_id << " has active deref node " << n << std::endl;
+                        deref_nodes.insert(n);
                         num_to_derefine++;
                     }
                     else { // only needed for 8:2
@@ -1415,7 +1442,8 @@ namespace AMR {
                     //else if (refinement_case == AMR::Refinement_Case::one_to_eight)
                     else if (children.size() == 8)
                     {
-                        bool same_face = false; // TODO: This
+                        bool same_face = points_on_same_face(tet_id, deref_nodes);
+                        //bool same_face = true;
                         // If inactive points lie on same face
                         if (same_face == true)
                         {
@@ -1441,7 +1469,7 @@ namespace AMR {
                     //else if (children.size() == 4)
                 {
                     // Io inactive points lie on the same face
-                    bool same_face = false; // TODO: This
+                    bool same_face = points_on_same_face(tet_id, deref_nodes);
                     if (same_face == true)
                     {
                         // Deactivate third point of face
@@ -1485,13 +1513,15 @@ namespace AMR {
                     tet_store.mark_derefinement_decision(tet_id, AMR::Derefinement_Case::eight_to_one);
                 }
 
+                /*
+                // TODO: should this unmark all?
                 else {
                     trace_out << "giving up with no deref decision, ndref = " << num_to_derefine << std::endl;
-                    // TODO: shoudl this unmark all?
                     trace_out << "in size " << derefine_node_set.size() << std::endl;
                     deref_deactivate_points(derefine_node_set, non_parent_nodes);
                     trace_out << "out size " << derefine_node_set.size() << std::endl;
                 }
+                */
             }
 
             // If nothing changed during that round, break
@@ -1556,12 +1586,10 @@ namespace AMR {
                 trace_out << tet_id << " Looping over " << children.size() << "children" << std::endl;
                 for (size_t i = 0; i < children.size(); i++)
                 {
-                    // TODO: Is this in element or tet ids?
                     edge_list_t edge_list = tet_store.generate_edge_keys(children[i]);
                     for (size_t k = 0; k < NUM_TET_EDGES; k++)
                     {
                         edge_t edge = edge_list[k];
-                        // TODO: where do we makr the edges that need to be derefed? parent of child?
                         if (tet_store.edge_store.get(edge).needs_derefining)
                         {
                             // Check each node, see if its an intermediate
@@ -1654,7 +1682,6 @@ namespace AMR {
                     //else if (refinement_case == AMR::Refinement_Case::one_to_eight)
                     else if (children.size() == 8)
                     {
-                        bool same_face = false; // TODO: This
                         // If inactive points lie on same face
                         if (same_face == true)
                         {
@@ -1678,7 +1705,6 @@ namespace AMR {
                 //else if (children.size() == 4)
                 {
                     // If inactive points lie on the same face
-                    bool same_face = false; // TODO: This
                     if (same_face == true)
                     {
                         // Deactivate third point of face
@@ -1717,7 +1743,6 @@ namespace AMR {
 
                 else {
                     trace_out << "giving up with no deref decision" << std::endl;
-                    // TODO: shoudl this unmark all?
                     deref_deactivate_edges(tet_id);
                 }
             }
@@ -1734,7 +1759,9 @@ namespace AMR {
         */
     }
 
-    // TODO: document
+    /**
+     * @brief Process list of marked derefinment decisions
+     */
     void mesh_adapter_t::perform_derefinement()
     {
         trace_out << "start additional marking call, as refinement may have messed stuff up" << std::endl;
@@ -1749,7 +1776,6 @@ namespace AMR {
             //size_t parent_id = 0;
 
             // TODO: Do I really want to loop all tets?
-
             // TODO: is this doing a double lookup?
             if (tet_store.has_derefinement_decision(tet_id))
             {
@@ -1797,7 +1823,6 @@ namespace AMR {
                         refiner.derefine_eight_to_two(tet_store,node_connectivity,tet_id);
                         break;
                     case AMR::Derefinement_Case::eight_to_four:
-                        exit(1);
                         refiner.derefine_eight_to_four(tet_store,node_connectivity,tet_id);
                         break;
                     case AMR::Derefinement_Case::no_deref:
