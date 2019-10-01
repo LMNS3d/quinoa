@@ -28,7 +28,8 @@ enum class AMRInitialType : uint8_t { UNIFORM
                                     , INITIAL_CONDITIONS
                                     , REFEDGES
                                     , DEREFCELLS
-                                    , COORDINATES };
+                                    , COORD_DEREFINE
+                                    , COORD_REFINE };
 
 //! Pack/Unpack AMRInitialType: forward overload to generic enum class packer
 inline void operator|( PUP::er& p, AMRInitialType& e )
@@ -43,7 +44,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
                                   , kw::amr_uniform_derefine
                                   , kw::amr_initial_conditions
                                   , kw::amr_refedges
-                                  , kw::amr_coords >;
+                                  , kw::amr_coord_ref
+                                  , kw::amr_coord_deref >;
 
     //! \brief Options constructor
     //! \details Simply initialize in-line and pass associations to base, which
@@ -60,7 +62,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
             kw::amr_initial_conditions::name() },
           { AMRInitialType::REFEDGES, kw::amr_refedges::name() },
           { AMRInitialType::DEREFCELLS, kw::amr_derefcells::name() },
-          { AMRInitialType::COORDINATES, kw::amr_coords::name() } },
+          { AMRInitialType::COORD_REFINE, kw::amr_coord_ref::name() },
+          { AMRInitialType::COORD_DEREFINE, kw::amr_coord_deref::name() } },
         //! keywords -> Enums
         { { kw::amr_uniform::string(), AMRInitialType::UNIFORM },
           { kw::amr_uniform_derefine::string(),
@@ -69,7 +72,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
             AMRInitialType::INITIAL_CONDITIONS },
           { kw::amr_refedges::string(), AMRInitialType::REFEDGES },
           { kw::amr_derefcells::string(), AMRInitialType::DEREFCELLS },
-          { kw::amr_coords::string(), AMRInitialType::COORDINATES } } )
+          { kw::amr_coord_ref::string(), AMRInitialType::COORD_REFINE },
+          { kw::amr_coord_deref::string(), AMRInitialType::COORD_DEREFINE } } )
     {
        brigand::for_each< keywords >( assertPolicyCodes() );
     }
@@ -105,7 +109,8 @@ class AMRInitial : public tk::Toggle< AMRInitialType > {
           *kw::amr_initial_conditions::code() }
       , { AMRInitialType::REFEDGES, *kw::amr_refedges::code() }
       , { AMRInitialType::DEREFCELLS, *kw::amr_derefcells::code() }
-      , { AMRInitialType::COORDINATES, *kw::amr_coords::code() }
+      , { AMRInitialType::COORD_REFINE, *kw::amr_coord_ref::code() }
+      , { AMRInitialType::COORD_DEREFINE, *kw::amr_coord_deref::code() }
     };
 };
 

@@ -61,18 +61,34 @@ using amr = tk::TaggedTuple< brigand::list<
   , tag::edge,    std::vector< kw::amr_refedges::info::expect::type >
   //! List of cells to derefine
   , tag::cell,    std::vector< kw::amr_derefcells::info::expect::type >
-  //! Refinement tagging edges with end-point coordinates lower than x coord
-  , tag::xminus,  kw::amr_xminus::info::expect::type
-  //! Refinement tagging edges with end-point coordinates higher than x coord
-  , tag::xplus,  kw::amr_xplus::info::expect::type
-  //! Refinement tagging edges with end-point coordinates lower than y coord
-  , tag::yminus,  kw::amr_yminus::info::expect::type
-  //! Refinement tagging edges with end-point coordinates higher than y coord
-  , tag::yplus,  kw::amr_yplus::info::expect::type
-  //! Refinement tagging edges with end-point coordinates lower than z coord
-  , tag::zminus,  kw::amr_zminus::info::expect::type
-  //! Refinement tagging edges with end-point coordinates higher than z coord
-  , tag::zplus,  kw::amr_zplus::info::expect::type
+  //! Edges tagged for refinement using coordinates
+  , tag::refine,  tk::TaggedTuple< brigand::list<
+    //! Refinement tagging edges with end-point coordinates lower than x coord
+      tag::xminus,  kw::amr_xminus::info::expect::type
+    //! Refinement tagging edges with end-point coordinates higher than x coord
+    , tag::xplus,  kw::amr_xplus::info::expect::type
+    //! Refinement tagging edges with end-point coordinates lower than y coord
+    , tag::yminus,  kw::amr_yminus::info::expect::type
+    //! Refinement tagging edges with end-point coordinates higher than y coord
+    , tag::yplus,  kw::amr_yplus::info::expect::type
+    //! Refinement tagging edges with end-point coordinates lower than z coord
+    , tag::zminus,  kw::amr_zminus::info::expect::type
+    //! Refinement tagging edges with end-point coordinates higher than z coord
+    , tag::zplus,  kw::amr_zplus::info::expect::type > >
+  //! Edges tagged for de-refinement using coordinates
+  , tag::derefine,  tk::TaggedTuple< brigand::list<
+    //! De-refinement tagging edges with end-point coordinates lower than x coord
+      tag::xminus,  kw::amr_xminus::info::expect::type
+    //! De-refinement tagging edges with end-point coordinates higher than x coord
+    , tag::xplus,  kw::amr_xplus::info::expect::type
+    //! De-refinement tagging edges with end-point coordinates lower than y coord
+    , tag::yminus,  kw::amr_yminus::info::expect::type
+    //! De-refinement tagging edges with end-point coordinates higher than y coord
+    , tag::yplus,  kw::amr_yplus::info::expect::type
+    //! De-refinement tagging edges with end-point coordinates lower than z coord
+    , tag::zminus,  kw::amr_zminus::info::expect::type
+    //! De-refinement tagging edges with end-point coordinates higher than z coord
+    , tag::zplus,  kw::amr_zplus::info::expect::type > >
 > >;
 
 //! p-adaptive refinement options

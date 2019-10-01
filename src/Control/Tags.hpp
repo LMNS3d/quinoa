@@ -118,6 +118,8 @@ struct fct {};
 struct ctau {};
 struct npar {};
 struct refined {};
+struct refine {};
+struct derefine {};
 struct matched {};
 struct edges {};
 struct compatibility {};

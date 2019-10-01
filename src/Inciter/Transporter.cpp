@@ -226,27 +226,52 @@ Transporter::info()
         std::numeric_limits< kw::amr_xminus::info::expect::type >::max();
       auto eps =
         std::numeric_limits< kw::amr_xminus::info::expect::type >::epsilon();
-     
-      auto xminus = g_inputdeck.get< tag::amr, tag::xminus >();
+
+      { 
+      auto xminus = g_inputdeck.get< tag::amr, tag::refine, tag::xminus >();
       if (std::abs( xminus - rmax ) > eps)
         m_print.item( "Initial refinement x-", xminus );
-      auto xplus = g_inputdeck.get< tag::amr, tag::xplus >();
+      auto xplus = g_inputdeck.get< tag::amr, tag::refine, tag::xplus >();
       if (std::abs( xplus - rmax ) > eps)
         m_print.item( "Initial refinement x+", xplus );
 
-      auto yminus = g_inputdeck.get< tag::amr, tag::yminus >();
+      auto yminus = g_inputdeck.get< tag::amr, tag::refine, tag::yminus >();
       if (std::abs( yminus - rmax ) > eps)
         m_print.item( "Initial refinement y-", yminus );
-      auto yplus = g_inputdeck.get< tag::amr, tag::yplus >();
+      auto yplus = g_inputdeck.get< tag::amr, tag::refine, tag::yplus >();
       if (std::abs( yplus - rmax ) > eps)
         m_print.item( "Initial refinement y+", yplus );
 
-      auto zminus = g_inputdeck.get< tag::amr, tag::zminus >();
+      auto zminus = g_inputdeck.get< tag::amr, tag::refine, tag::zminus >();
       if (std::abs( zminus - rmax ) > eps)
         m_print.item( "Initial refinement z-", zminus );
-      auto zplus = g_inputdeck.get< tag::amr, tag::zplus >();
+      auto zplus = g_inputdeck.get< tag::amr, tag::refine, tag::zplus >();
       if (std::abs( zplus - rmax ) > eps)
         m_print.item( "Initial refinement z+", zplus );
+      }
+
+      {
+      auto xminus = g_inputdeck.get< tag::amr, tag::derefine, tag::xminus >();
+      if (std::abs( xminus - rmax ) > eps)
+        m_print.item( "Initial de-refinement x-", xminus );
+      auto xplus = g_inputdeck.get< tag::amr, tag::derefine, tag::xplus >();
+      if (std::abs( xplus - rmax ) > eps)
+        m_print.item( "Initial de-refinement x+", xplus );
+
+      auto yminus = g_inputdeck.get< tag::amr, tag::derefine, tag::yminus >();
+      if (std::abs( yminus - rmax ) > eps)
+        m_print.item( "Initial de-refinement y-", yminus );
+      auto yplus = g_inputdeck.get< tag::amr, tag::derefine, tag::yplus >();
+      if (std::abs( yplus - rmax ) > eps)
+        m_print.item( "Initial de-refinement y+", yplus );
+
+      auto zminus = g_inputdeck.get< tag::amr, tag::derefine, tag::zminus >();
+      if (std::abs( zminus - rmax ) > eps)
+        m_print.item( "Initial de-refinement z-", zminus );
+      auto zplus = g_inputdeck.get< tag::amr, tag::derefine, tag::zplus >();
+      if (std::abs( zplus - rmax ) > eps)
+        m_print.item( "Initial de-refinement z+", zplus );
+      }
     }
     auto dtref = g_inputdeck.get< tag::amr, tag::dtref >();
     m_print.item( "Refinement at t>0 (dtref)", dtref );

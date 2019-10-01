@@ -140,7 +140,10 @@ class InputDeck : public tk::TaggedTuple< InputDeckMembers > {
                                    kw::amr_uniform,
                                    kw::amr_uniform_derefine,
                                    kw::amr_initial_conditions,
-                                   kw::amr_coords,
+                                   kw::amr_coord_ref,
+                                   kw::amr_coord_deref,
+                                   kw::amr_coord_ref_spec,
+                                   kw::amr_coord_deref_spec,
                                    kw::amr_error,
                                    kw::amr_jump,
                                    kw::amr_hessian,
@@ -149,7 +152,6 @@ class InputDeck : public tk::TaggedTuple< InputDeckMembers > {
                                    kw::amr_tolderef,
                                    kw::amr_refedges,
                                    kw::amr_derefcells,
-                                   kw::amr_coordref,
                                    kw::amr_xminus,
                                    kw::amr_xplus,
                                    kw::amr_yminus,
@@ -231,12 +233,18 @@ class InputDeck : public tk::TaggedTuple< InputDeckMembers > {
       get< tag::amr, tag::tolderef >() = 0.05;
       auto rmax =
         std::numeric_limits< kw::amr_xminus::info::expect::type >::max();
-      get< tag::amr, tag::xminus >() = rmax;
-      get< tag::amr, tag::xplus >() = -rmax;
-      get< tag::amr, tag::yminus >() = rmax;
-      get< tag::amr, tag::yplus >() = -rmax;
-      get< tag::amr, tag::zminus >() = rmax;
-      get< tag::amr, tag::zplus >() = -rmax;
+      get< tag::amr, tag::refine, tag::xminus >() = rmax;
+      get< tag::amr, tag::refine, tag::xplus >() = -rmax;
+      get< tag::amr, tag::refine, tag::yminus >() = rmax;
+      get< tag::amr, tag::refine, tag::yplus >() = -rmax;
+      get< tag::amr, tag::refine, tag::zminus >() = rmax;
+      get< tag::amr, tag::refine, tag::zplus >() = -rmax;
+      get< tag::amr, tag::derefine, tag::xminus >() = rmax;
+      get< tag::amr, tag::derefine, tag::xplus >() = -rmax;
+      get< tag::amr, tag::derefine, tag::yminus >() = rmax;
+      get< tag::amr, tag::derefine, tag::yplus >() = -rmax;
+      get< tag::amr, tag::derefine, tag::zminus >() = rmax;
+      get< tag::amr, tag::derefine, tag::zplus >() = -rmax;
       // Default p-refinement settings
       get< tag::pref, tag::pref >() = false;
       get< tag::pref, tag::indicator >() = PrefIndicatorType::SPECTRAL_DECAY;

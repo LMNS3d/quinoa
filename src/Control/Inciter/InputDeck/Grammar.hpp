@@ -645,22 +645,23 @@ namespace deck {
                           tk::grm::check_vector< tag::amr, tag::cell > > {};
 
 
-  //! xminus configuring coordinate-based edge tagging for mesh refinement
-  template< typename keyword, typename Tag >
+  //! configured coordinate-based edge tagging for mesh refinement
+  template< typename dir, typename keyword, typename Tag >
   struct half_world :
-         tk::grm::control< use< keyword >, pegtl::digit, tag::amr, Tag > {};
+         tk::grm::control< use< keyword >, pegtl::digit, tag::amr, dir, Tag >{};
 
-  //! coordref ... end block
-  struct coordref :
+  //! coord_ref/deref ... end block
+  template< typename dir, typename spec_keyword >
+  struct coord_amr :
            pegtl::if_must<
-             tk::grm::readkw< use< kw::amr_coordref >::pegtl_string >,
+             tk::grm::readkw< typename use< spec_keyword >::pegtl_string >,
              tk::grm::block< use< kw::end >,
-                         half_world< kw::amr_xminus, tag::xminus >,
-                         half_world< kw::amr_xplus, tag::xplus >,
-                         half_world< kw::amr_yminus, tag::yminus >,
-                         half_world< kw::amr_yplus, tag::yplus >,
-                         half_world< kw::amr_zminus, tag::zminus >,
-                         half_world< kw::amr_zplus, tag::zplus > > > {};
+                             half_world< dir, kw::amr_xminus, tag::xminus >,
+                             half_world< dir, kw::amr_xplus, tag::xplus >,
+                             half_world< dir, kw::amr_yminus, tag::yminus >,
+                             half_world< dir, kw::amr_yplus, tag::yplus >,
+                             half_world< dir, kw::amr_zminus, tag::zminus >,
+                             half_world< dir, kw::amr_zplus, tag::zplus > > >{};
 
   //! initial conditions block for compressible flow
   template< class eq, class param >
@@ -858,7 +859,8 @@ namespace deck {
                            refvars,
                            refedges,
                            derefcells,
-                           coordref,
+                           coord_amr< tag::refine, kw::amr_coord_ref_spec >,
+                           coord_amr< tag::derefine, kw::amr_coord_deref_spec >,
                            tk::grm::process<
                              use< kw::amr_initial >,
                              tk::grm::store_back_option< use,
