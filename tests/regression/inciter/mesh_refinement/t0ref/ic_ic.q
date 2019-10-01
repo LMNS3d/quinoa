@@ -38,14 +38,14 @@ inciter
     initial ic
     #initial ic
     #initial ic
-    #initial coords
-    #initial coords
-    #initial coords
+    #initial coord_ref
+    #initial coord_ref
+    #initial coord_ref
     refvar c end
     error jump
     tol_refine 0.8
 
-#    coordref
+#    coord_ref
 #      #x- 0.5
 #      x+ 0.5 #x- 0.75
 #      #y+ 0.25 y- 0.75

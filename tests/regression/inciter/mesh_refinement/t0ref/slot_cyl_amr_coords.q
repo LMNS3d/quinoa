@@ -29,10 +29,10 @@ inciter
     t0ref true
     #initial uniform
     #initial ic
-    initial coords
-    initial coords
+    initial coord_ref
+    initial coord_ref
 
-    coordref
+    coord_ref
       x- 0.5
       #x+ 0.25 x- 0.75
     end

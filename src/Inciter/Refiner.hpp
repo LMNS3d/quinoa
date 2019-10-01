@@ -280,6 +280,8 @@ class Refiner : public CBase_Refiner {
     //std::unordered_map< std::size_t, std::size_t > m_oldlref;
     //! Child -> parent tet map
     std::unordered_map< Tet, Tet, Hash<4>, Eq<4> > m_parent;
+    //! Edges tagged for derefinement
+    EdgeSet m_deref_edges;
 
     //! (Re-)generate boundary data structures for coarse mesh
     void coarseBnd();
@@ -324,8 +326,9 @@ class Refiner : public CBase_Refiner {
     //! Do mesh derefinement based on user explicitly tagging cells
     void cellsDerefine();
 
-    //! Do mesh refinement based on tagging edges based on end-point coordinates
-    void coordRefine();
+    //! \brief Do mesh (de-)refinement based on tagging edges based on
+    //!    end-point coordinates
+    void coord_amr( AMR::edge_tag dir );
 
     //! Query AMR lib and update our local store of edge data
     void updateEdgeData();

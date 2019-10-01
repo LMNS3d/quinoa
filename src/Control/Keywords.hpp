@@ -4980,15 +4980,27 @@ struct amr_initial_conditions_info {
 using amr_initial_conditions =
   keyword< amr_initial_conditions_info, TAOCPP_PEGTL_STRING("ic") >;
 
-struct amr_coords_info {
-  using code = Code< c >;
-  static std::string name() { return "coords"; }
+struct amr_coord_ref_info {
+  using code = Code< R >;
+  static std::string name() { return "coord_ref"; }
   static std::string shortDescription() { return
     "Select coordinate-based initial mesh refinement"; }
   static std::string longDescription() { return R"(This keyword is used to
     select coordinate-based initial mesh refinement.)"; }
 };
-using amr_coords = keyword< amr_coords_info, TAOCPP_PEGTL_STRING("coords") >;
+using amr_coord_ref =
+  keyword< amr_coord_ref_info, TAOCPP_PEGTL_STRING("coord_ref") >;
+
+struct amr_coord_deref_info {
+  using code = Code< D >;
+  static std::string name() { return "coord_deref"; }
+  static std::string shortDescription() { return
+    "Select coordinate-based initial mesh de-refinement"; }
+  static std::string longDescription() { return R"(This keyword is used to
+    select coordinate-based initial mesh de-refinement.)"; }
+};
+using amr_coord_deref =
+  keyword< amr_coord_deref_info, TAOCPP_PEGTL_STRING("coord_deref") >;
 
 struct amr_initial_info {
   static std::string name() { return "Initial refinement typelist"; }
@@ -4999,12 +5011,13 @@ struct amr_initial_info {
     that happens before t = 0. Example: initial uniform initial ic inital
     uniform, which yiedls an initial uniform refinement, followed by a
     refinement based on the numerical error computed based on the initial
-    conditions, followed by another step of unfirom refinement.)"; }
+    conditions, followed by another step of uniform refinement.)"; }
   struct expect {
     static std::string description() { return "string"; }
     static std::string choices() {
       return '\'' + amr_uniform::string() + "\' | \'"
-                  + amr_coords::string()  + "\' | \'"
+                  + amr_coord_ref::string()  + "\' | \'"
+                  + amr_coord_deref::string()  + "\' | \'"
                   + amr_initial_conditions::string() + '\'';
     }
   };
@@ -5076,14 +5089,14 @@ struct amr_derefcells_info {
 using amr_derefcells =
   keyword< amr_derefcells_info, TAOCPP_PEGTL_STRING("derefcells") >;
 
-struct amr_coordref_info {
+struct amr_coord_ref_spec_info {
   static std::string name() {
     return "initial refinement with coordinate planes"; }
   static std::string shortDescription() { return
     "Configure initial refinement using coordinate planes"; }
   static std::string longDescription() { return
     R"(This keyword can be used to configure entire volumes on a given side of a
-    plane in 3D space. The keyword introduces an coordref ... end block within
+    plane in 3D space. The keyword introduces an coord_ref ... end block within
     an amr ... end block and must contain the either or multiple of the
     following keywords: x- <real>, x+ <real>, y- <real>, y+ <real>, z- <real>,
     z+ <real>. All edges of the input mesh will be tagged for refinement whose
@@ -5093,21 +5106,42 @@ struct amr_coordref_info {
     AND. That is: 'x- 0.5 y+ 0.3' refines all edges whose end-point x
     coordinates are less than 0.5 AND y coordinates are larger than 0.3.)"; }
 };
-using amr_coordref =
-  keyword< amr_coordref_info, TAOCPP_PEGTL_STRING("coordref") >;
+using amr_coord_ref_spec =
+  keyword< amr_coord_ref_spec_info, TAOCPP_PEGTL_STRING("coord_ref") >;
+
+struct amr_coord_deref_spec_info {
+  static std::string name() {
+    return "initial de-refinement with coordinate planes"; }
+  static std::string shortDescription() { return
+    "Configure initial de-refinement using coordinate planes"; }
+  static std::string longDescription() { return
+    R"(This keyword can be used to configure entire volumes on a given side of a
+    plane in 3D space. The keyword introduces an coord_deref ... end block within
+    an amr ... end block and must contain the either or multiple of the
+    following keywords: x- <real>, x+ <real>, y- <real>, y+ <real>, z- <real>,
+    z+ <real>. All edges of the input mesh will be tagged for de-refinement whose
+    end-points lie less than (-) or larger than (+) the real number given.
+    Example: 'x- 0.5' refines all edges whose end-point coordinates are less
+    than 0.5. Multiple specifications are understood by combining with a logical
+    AND. That is: 'x- 0.5 y+ 0.3' de-refines all edges whose end-point x
+    coordinates are less than 0.5 AND y coordinates are larger than 0.3.)"; }
+};
+using amr_coord_deref_spec =
+  keyword< amr_coord_deref_spec_info, TAOCPP_PEGTL_STRING("coord_deref") >;
 
 struct amr_xminus_info {
-  static std::string name() { return "initial refinement: x-"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates lower than an x-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: x-"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates lower than an x-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are less than the x coordinate of a plane perpendicular to
-    coordinate x in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'x- <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie less than (-)
-    the real number given. Example: 'x- 0.5' refines all edges whose end-point
-    coordinates are less than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are less than the x coordinate of a plane
+    perpendicular to coordinate x in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'x- <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie less than (-) the real number given.
+    Example: 'x- 0.5' (de-)refines all edges whose end-point coordinates are
+    less than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5117,17 +5151,18 @@ using amr_xminus =
   keyword< amr_xminus_info, TAOCPP_PEGTL_STRING("x-") >;
 
 struct amr_xplus_info {
-  static std::string name() { return "initial refinement: x+"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates larger than an x-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: x+"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates larger than an x-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are larger than the x coordinate of a plane perpendicular
-    to coordinate x in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'x+ <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie larger than
-    (+) the real number given. Example: 'x+ 0.5' refines all edges whose
-    end-point coordinates are larger than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are larger than the x coordinate of a plane
+    perpendicular to coordinate x in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'x+ <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie larger than (+) the real number given.
+    Example: 'x+ 0.5' (de-)refines all edges whose end-point coordinates are
+    larger than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5137,17 +5172,18 @@ using amr_xplus =
   keyword< amr_xplus_info, TAOCPP_PEGTL_STRING("x+") >;
 
 struct amr_yminus_info {
-  static std::string name() { return "initial refinement: y-"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates lower than an y-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: y-"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates lower than an y-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are less than the y coordinate of a plane perpendicular to
-    coordinate y in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'y- <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie less than (-)
-    the real number given. Example: 'y- 0.5' refines all edges whose end-point
-    coordinates are less than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are less than the y coordinate of a plane
+    perpendicular to coordinate y in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'y- <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie less than (-) the real number given.
+    Example: 'y- 0.5' (de-)refines all edges whose end-point coordinates are
+    less than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5157,17 +5193,18 @@ using amr_yminus =
   keyword< amr_yminus_info, TAOCPP_PEGTL_STRING("y-") >;
 
 struct amr_yplus_info {
-  static std::string name() { return "initial refinement: y+"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates larger than an y-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: y+"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates larger than an y-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are larger than the y coordinate of a plane perpendicular
-    to coordinate y in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'y+ <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie larger than
-    (+) the real number given. Example: 'y+ 0.5' refines all edges whose
-    end-point coordinates are larger than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are larger than the y coordinate of a plane
+    perpendicular to coordinate y in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'y+ <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie larger than (+) the real number given.
+    Example: 'y+ 0.5' (de-)refines all edges whose end-point coordinates are
+    larger than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5177,17 +5214,18 @@ using amr_yplus =
   keyword< amr_yplus_info, TAOCPP_PEGTL_STRING("y+") >;
 
 struct amr_zminus_info {
-  static std::string name() { return "initial refinement: z-"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates lower than an z-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: z-"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates lower than an z-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are less than the z coordinate of a plane perpendicular to
-    coordinate z in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'z- <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie less than (-)
-    the real number given. Example: 'z- 0.5' refines all edges whose end-point
-    coordinates are less than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are less than the z coordinate of a plane
+    perpendicular to coordinate z in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'z- <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie less than (-) the real number given.
+    Example: 'z- 0.5' (de-)refines all edges whose end-point coordinates are
+    less than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5197,17 +5235,18 @@ using amr_zminus =
   keyword< amr_zminus_info, TAOCPP_PEGTL_STRING("z-") >;
 
 struct amr_zplus_info {
-  static std::string name() { return "initial refinement: z+"; }
-  static std::string shortDescription() { return "Configure initial refinement "
-    "for coordinates larger than an z-normal plane"; }
+  static std::string name() { return "initial (de-)refinement: z+"; }
+  static std::string shortDescription() { return "Configure initial "
+    "(de-)refinement for coordinates larger than an z-normal plane"; }
   static std::string longDescription() { return
-    R"(This keyword can be used to configure a mesh refinement volume for edges
-    whose end-points are larger than the z coordinate of a plane perpendicular
-    to coordinate z in 3D space. The keyword must be used in a coordref ... end
-    block within an amr ... end block with syntax 'z+ <real>'. All edges of the
-    input mesh will be tagged for refinement whose end-points lie larger than
-    (+) the real number given. Example: 'z+ 0.5' refines all edges whose
-    end-point coordinates are larger than 0.5.)"; }
+    R"(This keyword can be used to configure a mesh (de-)refinement volume for
+    edges whose end-points are larger than the z coordinate of a plane
+    perpendicular to coordinate z in 3D space. The keyword must be used in a
+    coord_ref ... end or coord_deref ... end block within an amr ... end block
+    with syntax 'z+ <real>'. All edges of the input mesh will be tagged for
+    (de-)refinement whose end-points lie larger than (+) the real number given.
+    Example: 'z+ 0.5' (de-)refines all edges whose end-point coordinates are
+    larger than 0.5.)"; }
   struct expect {
     using type = tk::real;
     static std::string description() { return "real"; }
@@ -5388,7 +5427,8 @@ struct amr_info {
     + amr_tolref::string() + "\' | \'"
     + amr_tolderef::string() + "\' | \'"
     + amr_error::string() + "\' | \'"
-    + amr_coordref::string() + "\' | \'"
+    + amr_coord_ref::string() + "\' | \'"
+    + amr_coord_deref::string() + "\' | \'"
     + amr_refedges::string() + "\' | \'"
     + amr_derefcells::string() + "\'.";
   }

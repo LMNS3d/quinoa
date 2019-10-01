@@ -85,7 +85,8 @@ Refiner::Refiner( const CProxy_Transporter& transporter,
   m_coarseBndNodes(),
   m_rid( ginpoel.size() ),
   m_lref( ginpoel.size() ),
-  m_parent()
+  m_parent(),
+  m_deref_edges()
 // *****************************************************************************
 //  Constructor
 //! \param[in] transporter Transporter (host) proxy
@@ -391,8 +392,10 @@ Refiner::refine()
         uniformDerefine();
       else if (r == ctr::AMRInitialType::INITIAL_CONDITIONS)
         errorRefine();
-      else if (r == ctr::AMRInitialType::COORDINATES)
-        coordRefine();
+      else if (r == ctr::AMRInitialType::COORD_REFINE)
+        coord_amr( AMR::edge_tag::REFINE );
+      else if (r == ctr::AMRInitialType::COORD_DEREFINE)
+        coord_amr( AMR::edge_tag::DEREFINE );
       else if (r == ctr::AMRInitialType::REFEDGES)
         edgesRefine();
       else if (r == ctr::AMRInitialType::DEREFCELLS)
@@ -641,34 +644,33 @@ Refiner::refinementFields() const
     error[e] /= 6.0;    // assign edge-average error to element
   }
 
-  // Lambda to add all children of an element for derefinement for vis.
-  auto deref = [&]( std::size_t e, std::vector< tk::real >& c ) {
-    const auto& tet_store = m_refiner.tet_store;
-      // query number of children of tet
-      auto nc = tet_store.data( e ).children.size();
-      if (nc > 0) {
-        for (decltype(nc) i=0; i<nc; ++i ) {      // for all child tets
-          // get child tet id
-          auto childtet = tet_store.get_child_id( e, i );
-          c[ childtet ] = 1.0;
-        }
-      }
-  };
+  // Create field with cells tagged for derefinement
+  std::vector< tk::real > coord_deref_cells( m_inpoel.size()/4, 0.0 );
+  for (std::size_t e=0; e<m_inpoel.size()/4; ++e) {
+    auto A = m_rid[ m_inpoel[e*4+0] ];
+    auto B = m_rid[ m_inpoel[e*4+1] ];
+    auto C = m_rid[ m_inpoel[e*4+2] ];
+    auto D = m_rid[ m_inpoel[e*4+3] ];
+    std::array<Edge,6> edges{{ {{A,B}}, {{B,C}}, {{A,C}},
+                               {{A,D}}, {{B,D}}, {{C,D}} }};
+    // sum error from edges to elements
+    bool tagged_all_edges = true;
+    for (const auto& ed : edges)
+      if (m_deref_edges.find(ed) == end(m_deref_edges))
+        tagged_all_edges = false;
 
-  // ...
-  std::vector< tk::real > derefcells( m_inpoel.size()/4, 0.0 );
-  const auto& cells = g_inputdeck.get< tag::amr, tag::cell >();
-  for (auto e : cells) deref( e, derefcells );
+    if (tagged_all_edges) coord_deref_cells[e] = 1.0;
+  }
 
   // Prepare element fields with mesh refinement data
   std::vector< std::string >
-    elemfieldnames{ "refinement level", "cell type", "error", "derefcells" };
+    elemfieldnames{ "refinement level", "cell type", "error", "coord_deref" };
   auto& tet_store = m_refiner.tet_store;
   std::vector< std::vector< tk::real > > elemfields{
     tet_store.get_refinement_level_list(),
     tet_store.get_cell_type_list(),
     error,
-    derefcells };
+    coord_deref_cells };
 
   using tuple_t = std::tuple< std::vector< std::string >,
                               std::vector< std::vector< tk::real > >,
@@ -1133,7 +1135,8 @@ Refiner::cellsDerefine()
     std::vector< std::pair< edge_t, edge_tag > > tagged_edges;
     for (auto e : cells) deref( e, tagged_edges );
 
-    std::cout << "deref edges passed: " << tagged_edges.size() << '\n';
+    std::cout << "tagging cells, deref edges passed: " << tagged_edges.size()
+              << '\n';
 
     // Derefine tagged edges
     m_refiner.mark_error_refinement( tagged_edges );
@@ -1147,18 +1150,32 @@ Refiner::cellsDerefine()
 }
 
 void
-Refiner::coordRefine()
+Refiner::coord_amr( AMR::edge_tag dir )
 // *****************************************************************************
-// Do mesh refinement based on tagging edges based on end-point coordinates
+// Do mesh (de-)refinement based on tagging edges based on end-point coordinates
+//! \param[in] dir Direction of AMR: refinement or derefinement
 // *****************************************************************************
 {
   // Get user-defined half-world coordinates
-  auto xminus = g_inputdeck.get< tag::amr, tag::xminus >();
-  auto xplus = g_inputdeck.get< tag::amr, tag::xplus >();
-  auto yminus = g_inputdeck.get< tag::amr, tag::yminus >();
-  auto yplus = g_inputdeck.get< tag::amr, tag::yplus >();
-  auto zminus = g_inputdeck.get< tag::amr, tag::zminus >();
-  auto zplus = g_inputdeck.get< tag::amr, tag::zplus >();
+
+  tk::real xminus = 0.0, xplus = 0.0;
+  tk::real yminus = 0.0, yplus = 0.0;
+  tk::real zminus = 0.0, zplus = 0.0;
+  if (dir == AMR::edge_tag::REFINE) {
+    xminus = g_inputdeck.get< tag::amr, tag::refine, tag::xminus >();
+    xplus = g_inputdeck.get< tag::amr, tag::refine, tag::xplus >();
+    yminus = g_inputdeck.get< tag::amr, tag::refine, tag::yminus >();
+    yplus = g_inputdeck.get< tag::amr, tag::refine, tag::yplus >();
+    zminus = g_inputdeck.get< tag::amr, tag::refine, tag::zminus >();
+    zplus = g_inputdeck.get< tag::amr, tag::refine, tag::zplus >();
+  } else {
+    xminus = g_inputdeck.get< tag::amr, tag::derefine, tag::xminus >();
+    xplus = g_inputdeck.get< tag::amr, tag::derefine, tag::xplus >();
+    yminus = g_inputdeck.get< tag::amr, tag::derefine, tag::yminus >();
+    yplus = g_inputdeck.get< tag::amr, tag::derefine, tag::yplus >();
+    zminus = g_inputdeck.get< tag::amr, tag::derefine, tag::zminus >();
+    zplus = g_inputdeck.get< tag::amr, tag::derefine, tag::zplus >();
+  }
 
   // The default is the largest representable double
   auto rmax = std::numeric_limits< kw::amr_xminus::info::expect::type >::max();
@@ -1186,7 +1203,7 @@ Refiner::coordRefine()
     const auto& x = m_coord[0];
     const auto& y = m_coord[1];
     const auto& z = m_coord[2];
-    // Compute edges to be tagged for refinement
+    // Compute edges to be tagged
     std::vector< std::pair< edge_t, edge_tag > > tagged_edges;
     for (std::size_t p=0; p<npoin; ++p)        // for all mesh nodes on this chare
       for (auto q : tk::Around(psup,p)) {      // for all nodes surrounding p
@@ -1201,13 +1218,22 @@ Refiner::coordRefine()
         if (zp) { if (z[p]<zplus && z[q]<zplus) t = false; }
 
         if (t) {
-          tagged_edges.push_back( { edge_t( m_rid[e[0]], m_rid[e[1]] ),
-                                    edge_tag::REFINE } );
+          tagged_edges.push_back( { edge_t( m_rid[e[0]], m_rid[e[1]] ), dir } );
         }
       }
 
+    std::cout << "tagging edges, deref edges passed: " << tagged_edges.size()
+              << '\n';
+
     // Do error-based refinement
     m_refiner.mark_error_refinement( tagged_edges );
+
+    // Save/update edges tagged for derefinement
+    m_deref_edges.clear();
+    for (const auto& e : tagged_edges) {
+      const auto& ed = e.first.get_data();
+      m_deref_edges.insert( {ed[0],ed[1]} );
+    }
 
     // Update our extra-edge store based on refiner
     updateEdgeData();
