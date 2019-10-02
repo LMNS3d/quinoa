@@ -245,7 +245,7 @@ namespace AMR {
             {
                 trace_out << "do refine 1:4 " << std::endl;
                 //bool face_refine = false;
-                size_t face_refine_id = 0; // FIXME: Does this need a better default
+                size_t face_refine_id = -1; // FIXME: Does this need a better default
                 face_list_t face_list = tet_store.generate_face_lists(tet_id);
 
                 // Iterate over each face
@@ -294,6 +294,7 @@ namespace AMR {
                         break;
                     }
                 }
+                assert(face_refine_id >= 0);
 
                 tet_t tet = tet_store.get(tet_id);
                 size_t opposite_offset = AMR::node_connectivity_t::face_list_opposite(face_list, face_refine_id);

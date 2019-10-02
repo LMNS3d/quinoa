@@ -692,6 +692,10 @@ namespace AMR
                 }
                 trace_out << "face " << face << " has " << nodes_copy.size() <<
                     " left " << std::endl;
+                for (auto n : nodes_copy)
+                {
+                    trace_out << "--> " << n << std::endl;
+                }
         }
 
         return same_face;
@@ -1353,6 +1357,7 @@ namespace AMR
                 // Find how many active nodes in this tet are in the
                 // derefine_node_set, and track the 1:2 split face
                 std::set<size_t> deref_nodes;
+                std::set<size_t> non_deref_nodes;
                 int num_to_derefine = 0;
                 int last_no = -1; // this is a nasty hack to track the 8:2 face to split on
                 for (auto n : non_parent_nodes)
@@ -1364,6 +1369,7 @@ namespace AMR
                         num_to_derefine++;
                     }
                     else { // only needed for 8:2
+                        non_deref_nodes.insert(n);
                         last_no = n;
                     }
                 }
@@ -1442,7 +1448,21 @@ namespace AMR
                     //else if (refinement_case == AMR::Refinement_Case::one_to_eight)
                     else if (children.size() == 8)
                     {
-                        bool same_face = points_on_same_face(tet_id, deref_nodes);
+                        // If it's on the same face for any children (most
+                        // likely the center of the 1:8...
+                        // TODO: this can only be the center face,  looking at
+                        // them all is silly (and may give a really odd
+                        // result?). We should look only at external faces else
+                        // we may cut a plane through the tet..
+                        bool same_face = false;
+                        for (size_t i = 0; i < children.size(); i++)
+                        {
+                            if (points_on_same_face(children[i], non_deref_nodes))
+                            {
+                                same_face = true;
+                                break;
+                            }
+                        }
                         //bool same_face = true;
                         // If inactive points lie on same face
                         if (same_face == true)
@@ -1466,10 +1486,17 @@ namespace AMR
 
                 // "If nderefine = 4
                 else if (num_to_derefine == 4)
-                    //else if (children.size() == 4)
                 {
                     // Io inactive points lie on the same face
-                    bool same_face = points_on_same_face(tet_id, deref_nodes);
+                    bool same_face = false;
+                    for (size_t i = 0; i < children.size(); i++)
+                    {
+                        if (points_on_same_face(children[i], non_deref_nodes))
+                        {
+                            same_face = true;
+                            break;
+                        }
+                    }
                     if (same_face == true)
                     {
                         // Deactivate third point of face
