@@ -128,6 +128,8 @@ struct part {};
 struct centroid {};
 struct ncomp {};
 struct nmat {};
+struct prelax {};
+struct prelax_timescale {};
 struct tty {};
 struct dump {};
 struct plot {};

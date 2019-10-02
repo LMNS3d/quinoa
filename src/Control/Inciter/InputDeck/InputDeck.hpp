@@ -182,6 +182,8 @@ class InputDeck : public tk::TaggedTuple< InputDeckMembers > {
                                    kw::nolimiter,
                                    kw::wenop1,
                                    kw::superbeep1,
+                                   kw::prelax,
+                                   kw::prelax_timescale,
                                    kw::bc_sym,
                                    kw::bc_inlet,
                                    kw::bc_outlet,
@@ -193,7 +195,8 @@ class InputDeck : public tk::TaggedTuple< InputDeckMembers > {
                                    kw::sod_shocktube,
                                    kw::sedov_blastwave,
                                    kw::interface_advection,
-                                   kw::gauss_hump_compflow >;
+                                   kw::gauss_hump_compflow,
+                                   kw::waterair_shocktube >;
 
     //! \brief Constructor: set defaults
     //! \param[in] cl Previously parsed and store command line
