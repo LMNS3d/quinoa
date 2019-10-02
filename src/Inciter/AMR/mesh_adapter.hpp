@@ -78,7 +78,7 @@ namespace AMR {
 
             void lock_tet_edges(size_t tet_id);
 
-            bool points_on_same_face(size_t tet_id, std::set<size_t> nodes);
+            int points_on_same_face(size_t tet_id, std::set<size_t> nodes);
             void deref_deactivate_points(
                 //size_t parent_id,
                 std::unordered_set<size_t>& derefine_node_set,

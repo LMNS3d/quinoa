@@ -413,6 +413,7 @@ namespace AMR
     void mesh_adapter_t::perform_refinement()
     {
         // Track tets which needs to be deleted this iteration
+        // TODO: unordered_set?
         std::set<size_t> round_two;
 
         trace_out << "Perform ref" << std::endl;
@@ -668,12 +669,12 @@ namespace AMR
      * @param tet_id The tet to check the nodes against
      * @param nodes The nodes to check
      *
-     * @return bool giving yes/no
+     * @return int indicating which face, < 0 means false/no
      */
-    bool mesh_adapter_t::points_on_same_face(size_t tet_id, std::set<size_t> nodes)
+    // TODO: unordered_set?
+    int mesh_adapter_t::points_on_same_face(size_t tet_id, std::set<size_t> nodes)
     {
-        bool same_face = false;
-
+        int same_face = -1;
 
         // Go over every face, and see if one face includes all of input `nodes`
         face_list_t face_list = tet_store.generate_face_lists(tet_id);
@@ -681,6 +682,7 @@ namespace AMR
         {
                 // Lets copy the nodes we recieved in, so we can safely delete
                 // each time we found them
+                // TODO: unordered_set?
                 std::set<size_t> nodes_copy(nodes);
                 for (size_t k = 0; k < NUM_FACE_NODES; k++)
                 {
@@ -688,7 +690,8 @@ namespace AMR
                 }
                 if (nodes_copy.size() == 0) {
                     trace_out << "same face is true " << face << std::endl;
-                    same_face = true;
+                    same_face = face;
+                    break;
                 }
                 trace_out << "face " << face << " has " << nodes_copy.size() <<
                     " left " << std::endl;
@@ -702,6 +705,13 @@ namespace AMR
 
     }
 
+    /**
+     * @brief Deactivate given nodes. In practise this means delete a small set
+     * of nodes from a big set of active nodes
+     *
+     * @param derefine_node_set the active node collection to remove it from
+     * @param non_parent_nodes the nodes to remove
+     */
     void mesh_adapter_t::deref_deactivate_points(
         //size_t parent_id,
         std::unordered_set<size_t>& derefine_node_set,
@@ -1356,6 +1366,7 @@ namespace AMR
 
                 // Find how many active nodes in this tet are in the
                 // derefine_node_set, and track the 1:2 split face
+                // TODO: unordered_set?
                 std::set<size_t> deref_nodes;
                 std::set<size_t> non_deref_nodes;
                 int num_to_derefine = 0;
@@ -1455,9 +1466,12 @@ namespace AMR
                         // result?). We should look only at external faces else
                         // we may cut a plane through the tet..
                         bool same_face = false;
+                        int shared_face = -1;
                         for (size_t i = 0; i < children.size(); i++)
                         {
-                            if (points_on_same_face(children[i], non_deref_nodes))
+                            // Shared face is the face the inactive nodes are on
+                            shared_face = points_on_same_face(children[i], non_deref_nodes);
+                            if (shared_face >= 0)
                             {
                                 same_face = true;
                                 break;
@@ -1467,6 +1481,8 @@ namespace AMR
                         // If inactive points lie on same face
                         if (same_face == true)
                         {
+                            // TODO: we could collapse these conditionals
+                            refiner.eight_to_four_map[tet_id] = shared_face;
                             // Accept as 8:4 derefinement
                             trace_out << "Accept as 8:4" << std::endl;
                             //refiner.derefine_eight_to_four(tet_store,  node_connectivity, tet_id);
@@ -1489,9 +1505,11 @@ namespace AMR
                 {
                     // Io inactive points lie on the same face
                     bool same_face = false;
+                    int shared_face = -1;
                     for (size_t i = 0; i < children.size(); i++)
                     {
-                        if (points_on_same_face(children[i], non_deref_nodes))
+                        shared_face = points_on_same_face(children[i], non_deref_nodes);
+                        if (shared_face >= 0)
                         {
                             same_face = true;
                             break;
@@ -1499,8 +1517,21 @@ namespace AMR
                     }
                     if (same_face == true)
                     {
+                        refiner.eight_to_four_map[tet_id] = shared_face;
                         // Deactivate third point of face
-                        // TODO: Deactivate third face
+                        face_list_t face_list = tet_store.generate_face_lists(tet_id);
+                        for (size_t k = 0; k < NUM_FACE_NODES; k++)
+                        {
+                            // TODO: this is so lazy, making a set on 1, but
+                            // using this mehtod allows the code to track if
+                            // the underlying system state was changed
+                            std::unordered_set<size_t>
+                                in(face_list[shared_face][k]);
+                            deref_deactivate_points(
+                                derefine_node_set,
+                                in
+                            );
+                        }
 
                         // Accept as 8:4 derefinement
                         trace_out << "Accept as 8:4" << std::endl;
@@ -1869,6 +1900,7 @@ namespace AMR
 
         trace_out << "clearing split center" << std::endl;
         refiner.eight_to_two_map.clear();
+        refiner.eight_to_four_map.clear();
 
         for (auto& kv : tet_store.edge_store.edges) {
            auto& local = kv.second;

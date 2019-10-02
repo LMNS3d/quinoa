@@ -27,6 +27,7 @@ namespace AMR {
 
             size_t MAX_REFINEMENT_LEVEL = 10;
             std::unordered_map<size_t, size_t> eight_to_two_map;
+            std::unordered_map<size_t, size_t> eight_to_four_map;
 
             // TODO: Document this
             child_id_list_t generate_child_ids( tet_store_t& tet_store, size_t parent_id, size_t count = MAX_CHILDREN)
@@ -240,12 +241,14 @@ namespace AMR {
              * @param node_connectivity Mesh node connectivity (graph)
              * @param tet_id The id to refine 1:4
             */
-            void refine_one_to_four( tet_store_t& tet_store,
-                    node_connectivity_t& node_connectivity, size_t tet_id)
+            void refine_one_to_four(
+                    tet_store_t& tet_store,
+                    node_connectivity_t& node_connectivity, size_t tet_id
+            )
             {
                 trace_out << "do refine 1:4 " << std::endl;
                 //bool face_refine = false;
-                size_t face_refine_id = -1; // FIXME: Does this need a better default
+                int face_refine_id = -1; // FIXME: Does this need a better default
                 face_list_t face_list = tet_store.generate_face_lists(tet_id);
 
                 // Iterate over each face
@@ -951,7 +954,31 @@ namespace AMR {
                 //if (!check_allowed_derefinement(tet_store,parent_id)) return;
                 // TODO: think about if the logic for these derefs are right
                 derefine_eight_to_one(tet_store, node_connectivity, parent_id);
-                refine_one_to_four( tet_store, node_connectivity, parent_id);
+
+                // Check if we already have a cached result
+                auto it = eight_to_four_map.find(parent_id);
+
+                // TODO: this should always be true for deref
+                if (it != eight_to_four_map.end())
+                {
+                    // If we do have a cached result, we can call the specific
+                    // underlying refine_one_to_four function without the
+                    // helper. (We can push some of this logic into a new
+                    // function..)
+
+                    //refine_one_to_four(tet_store, node_connectivity, parent_id, it->second);
+                    int face_refine_id = it->second;
+                    tet_t tet = tet_store.get(parent_id);
+                    face_list_t face_list = tet_store.generate_face_lists(parent_id);
+                    size_t opposite_offset = AMR::node_connectivity_t::face_list_opposite(face_list, face_refine_id);
+                    size_t opposite_id = tet[opposite_offset];
+                    refine_one_to_four(tet_store, node_connectivity, parent_id, face_list[face_refine_id], opposite_id);
+                }
+                else {
+                    std::cerr << "can't find deref 8:4 decision, for " << parent_id << " aborting" << std::endl;
+                    exit(1);
+                    //refine_one_to_four(tet_store, node_connectivity, parent_id);
+                }
             }
 
             /**
