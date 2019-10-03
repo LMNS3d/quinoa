@@ -771,7 +771,7 @@ namespace AMR {
                 Refinement_State& parent = tet_store.data(parent_id);
                 for (auto c : parent.children)
                 {
-                    std::cout << "Erasing " << c << " which has " << tet_store.data(c).children.size() << " children " << std::endl;
+                    trace_out << "Erasing " << c << " which has " << tet_store.data(c).children.size() << " children " << std::endl;
                     tet_store.erase(c);
                     //tet_store.deactivate(c);
 
@@ -892,7 +892,7 @@ namespace AMR {
                 if (it != eight_to_two_map.end())
                 {
                     split_center = it->second;
-                    std::cout << parent_id << " Found split center as " << split_center << std::endl;
+                    trace_out << parent_id << " Found split center as " << split_center << std::endl;
                 }
                 else {
                     trace_out << parent_id << " Cant find split center???" << std::endl;
