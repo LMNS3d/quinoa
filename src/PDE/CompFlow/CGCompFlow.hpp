@@ -167,10 +167,10 @@ class CompFlow {
 
         // add (optional) source to all equations
         std::array< std::vector< tk::real >, 4 > s{{
-          Problem::src( m_system, m_ncomp, x[N[0]], y[N[0]], z[N[0]], t ),
-          Problem::src( m_system, m_ncomp, x[N[1]], y[N[1]], z[N[1]], t ),
-          Problem::src( m_system, m_ncomp, x[N[2]], y[N[2]], z[N[2]], t ),
-          Problem::src( m_system, m_ncomp, x[N[3]], y[N[3]], z[N[3]], t ) }};
+          Problem::src( m_system, /*m_ncomp*/e, /*x[N[0]]*/u[0][0], y[N[0]], z[N[0]], t ),
+          Problem::src( m_system, /*m_ncomp*/e, /*x[N[1]]*/u[0][1], y[N[1]], z[N[1]], t ),
+          Problem::src( m_system, /*m_ncomp*/e, /*x[N[2]]*/u[0][2], y[N[2]], z[N[2]], t ),
+          Problem::src( m_system, /*m_ncomp*/e, /*x[N[3]]*/u[0][3], y[N[3]], z[N[3]], t ) }};
         for (std::size_t c=0; c<5; ++c)
           for (std::size_t a=0; a<4; ++a)
             Ue.var(ue[c],e) += s[a][c] / 8.0;
@@ -253,7 +253,7 @@ class CompFlow {
         auto xc = (x[N[0]] + x[N[1]] + x[N[2]] + x[N[3]]) / 4.0;
         auto yc = (y[N[0]] + y[N[1]] + y[N[2]] + y[N[3]]) / 4.0;
         auto zc = (z[N[0]] + z[N[1]] + z[N[2]] + z[N[3]]) / 4.0;
-        auto s = Problem::src( m_system, m_ncomp, xc, yc, zc, t );
+        auto s = Problem::src( m_system, /*m_ncomp*/e, /*xc*/ue[0], yc, zc, t );
         for (std::size_t a=0; a<4; ++a)
           for (std::size_t c=0; c<5; ++c)
             R.var(r[c],N[a]) += d * s[c];

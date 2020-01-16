@@ -23,6 +23,7 @@ std::vector< std::string > CompFlowFieldNames()
 {
   std::vector< std::string > n;
 
+  n.push_back( "extra load" );
   n.push_back( "density_numerical" );
   n.push_back( "x-velocity_numerical" );
   n.push_back( "y-velocity_numerical" );
@@ -56,6 +57,10 @@ CompFlowFieldOutput( ncomp_t system,
   const auto rv = U.extract( 2*rdof, offset );
   const auto rw = U.extract( 3*rdof, offset );
   const auto re = U.extract( 4*rdof, offset );
+
+  std::vector< tk::real > L( r.size(), 0.0 );
+  for (std::size_t i=0; i<L.size(); ++i) if (r[i] > 1.5) L[i] = 1.0;
+  out.push_back( L );
 
   out.push_back( r );
 

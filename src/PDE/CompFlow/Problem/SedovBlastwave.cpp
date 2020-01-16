@@ -12,6 +12,8 @@
 */
 // *****************************************************************************
 
+#include <thread>
+
 #include "SedovBlastwave.hpp"
 #include "Inciter/InputDeck/InputDeck.hpp"
 #include "FieldOutput.hpp"
@@ -76,14 +78,19 @@ CompFlowProblemSedovBlastwave::solution( ncomp_t system,
 }
 
 tk::SrcFn::result_type
-CompFlowProblemSedovBlastwave::src( ncomp_t, ncomp_t, tk::real,
-                                  tk::real, tk::real, tk::real )
+CompFlowProblemSedovBlastwave::src( ncomp_t, ncomp_t e, tk::real r,
+                                    tk::real, tk::real, tk::real )
 // *****************************************************************************
 //  Compute and return source term for manufactured solution
 //! \return Array of reals containing the source for all components
 //! \note The function signature must follow tk::SrcFn
 // *****************************************************************************
 {
+  if (r > 1.5) {
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for( 50us );
+  }
+
   return {{ 0.0, 0.0, 0.0, 0.0, 0.0 }};
 }
 
