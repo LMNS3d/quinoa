@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <unordered_set>
 #include <map>
+#include <iostream>
 
 #include "Macro.hpp"
 #include "Exception.hpp"
@@ -812,6 +813,9 @@ class CompFlow {
       ur[2] = ur[0] * v2r;
       ur[3] = ur[0] * v3r;
       ur[4] = ul[4];
+
+      //if(fabs(fn[0]) > 0.5)
+      //  std::cout << "sym with fn = " << fn[0] << "\t" << fn[1] << "\t" << fn[2] << std::endl;
       return {{ std::move(ul), std::move(ur) }};
     }
 
@@ -858,6 +862,9 @@ class CompFlow {
 
       auto ur = ul;
 
+      //std::cout << "normal vector info " << fn[0] << "\t" << fn[1] << "\t" << fn[2] << std::endl;
+      //std::cout << "farfield " << frho << "\t" << fM << "\t" << fp << std::endl;
+
       if(fM <= -1)                         // Supersonic inflow
       {
         // For supersonic inflow, all the characteristics are from outside.
@@ -878,8 +885,9 @@ class CompFlow {
         ur[1] = frho * fu[0];
         ur[2] = frho * fu[1];
         ur[3] = frho * fu[2];
-        ur[4] =
-          eos_totalenergy< eq >( system, frho, fu[0], fu[1], fu[2], p );
+        ur[4] = frhoE;
+          //eos_totalenergy< eq >( system, frho, fu[0], fu[1], fu[2], fp );
+        //std::cout << "This is subsonic inlet" << std::endl;
       } else if(fM >= 0 && fM < 1)       // Subsonic outflow
       {
         // For subsonic outflow, there are 1 incoming characteristcs and 4
@@ -888,6 +896,7 @@ class CompFlow {
         // internal cell.
         ur[4] = eos_totalenergy< eq >( system, ul[0], ul[1]/ul[0], ul[2]/ul[0],
                                        ul[3]/ul[0], fp );
+        //std::cout << "This is subsonic outflow" << std::endl;
       }
       // Otherwise, for supersonic outflow, all the characteristics are from
       // internal cell. Therefore, we calculate the ghost cell state using the

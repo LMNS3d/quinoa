@@ -67,6 +67,8 @@ DiagWriter::header( const std::vector< std::string >& name ) const
     out.str("");
   }
 
+  m_outFile << std::setw(m_width) << "14:Re(r)";
+
   m_outFile << std::endl;
 }
 

@@ -84,6 +84,8 @@ mergeDiag( int nmsg, CkReductionMsg **msgs )
     // Max for the Linf norm of the numerical - analytical solution for all comp
     for (std::size_t i=0; i<v[LINFERR].size(); ++i)
       if (w[LINFERR][i] > v[LINFERR][i]) v[LINFERR][i] = w[LINFERR][i];
+    // Sum for the residual of density
+    for (std::size_t i=0; i<v[RES].size(); ++i) v[RES][i] += w[RES][i];
     // Copy the rest
     for (std::size_t j=3; j<v.size(); ++j)
       for (std::size_t i=0; i<v[j].size(); ++i)

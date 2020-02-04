@@ -69,6 +69,7 @@ Transporter::Transporter() :
   m_sorter(),
   m_nelem( 0 ),
   m_npoin( 0 ),
+  m_diag0( 0 ),
   m_meshvol( 0.0 ),
   m_minstat( {{ 0.0, 0.0, 0.0 }} ),
   m_maxstat( {{ 0.0, 0.0, 0.0 }} ),
@@ -984,7 +985,7 @@ Transporter::diagnostics( CkReductionMsg* msg )
   // Finish computing diagnostics
   for (std::size_t i=0; i<d[L2SOL].size(); ++i)
     diag[i] = sqrt( d[L2SOL][i] / m_meshvol );
-  
+
   // Query user-requested error types to output
   const auto& error = g_inputdeck.get< tag::diag, tag::error >();
 
@@ -1001,6 +1002,14 @@ Transporter::diagnostics( CkReductionMsg* msg )
         diag.push_back( d[LINFERR][i] );
     }
   }
+
+  // Add residual of density
+  if( static_cast<uint64_t>(d[ITER][0]) == 1 )
+    m_diag0 = d[RES][0];
+  diag.push_back( sqrt( d[RES][0] / m_diag0 ) );
+  std::cout << "d[ITER][0] = " << d[ITER][0] << "\t";
+  std::cout << "m_diag0 = " << m_diag0 << "\t";
+  std::cout << "diag[RES] = " << sqrt( d[RES][0] / m_diag0 ) << std::endl;
 
   // Append diagnostics file at selected times
   tk::DiagWriter dw( g_inputdeck.get< tag::cmd, tag::io, tag::diag >(),

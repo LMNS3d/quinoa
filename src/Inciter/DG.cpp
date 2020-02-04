@@ -55,6 +55,7 @@ DG::DG( const CProxy_Discretization& disc,
   m_ninitsol( 0 ),
   m_nlim( 0 ),
   m_nreco( 0 ),
+  m_it( 0 ),
   m_fd( Disc()->Inpoel(), bface, tk::remap(triinpoel,Disc()->Lid()) ),
   m_u( Disc()->Inpoel().size()/4,
        g_inputdeck.get< tag::discr, tag::rdof >()*
@@ -1559,7 +1560,11 @@ DG::solve( tk::real newdt )
   }
 
   // Update Un
-  if (m_stage == 0) m_un = m_u;
+  if (m_stage == 0)
+  {
+    m_un = m_u;
+    m_it++;
+  }
 
   for (const auto& eq : g_dgpde)
     eq.rhs( d->T(), m_geoFace, m_geoElem, m_fd, d->Inpoel(), d->Coord(), m_u,
@@ -1590,7 +1595,7 @@ DG::solve( tk::real newdt )
 
     // Compute diagnostics, e.g., residuals
     auto diag_computed = m_diag.compute( *d, m_u.nunk()-m_fd.Esuel().size()/4,
-                                         m_geoElem, m_ndof, m_u );
+                                         m_geoElem, m_ndof, m_u, m_rhs );
 
     // Increase number of iterations and physical time
     d->next();

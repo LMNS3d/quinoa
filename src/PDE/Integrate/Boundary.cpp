@@ -19,6 +19,14 @@
 #include "Boundary.hpp"
 #include "Vector.hpp"
 #include "Quadrature.hpp"
+#include "EoS/EoS.hpp"
+#include "Inciter/InputDeck/InputDeck.hpp"
+
+namespace inciter {
+
+extern ctr::InputDeck g_inputdeck;
+
+} // inciter::
 
 void
 tk::bndSurfInt( ncomp_t system,
@@ -170,6 +178,46 @@ tk::bndSurfInt( ncomp_t system,
           auto fl = flux( fn,
                       state( system, ncomp, ugp, gp[0], gp[1], gp[2], t, fn ),
                       vel( system, ncomp, gp[0], gp[1], gp[2] ) );
+
+          //if(fabs(fn[0]) > 0.9 && fn[0] < 0)
+          //{
+          //  auto rhoinf = 1.0;
+          //  auto uinf   = 0.5;
+          //  auto vinf   = 0.0;
+          //  auto winf   = 0.0;
+          //  auto pinf   = 0.6;
+          //  auto rhoEinf= inciter::eos_totalenergy< tag::compflow >
+          //                        ( system, rhoinf, uinf, vinf, winf, 0.6 );
+          //  auto vn = uinf * fn[0] + vinf * fn[1] + winf * fn[2];
+
+          //  auto pint = inciter::eos_pressure< tag::compflow >( system, ugp[0], ugp[1]/ugp[0], ugp[2]/ugp[0], ugp[3]/ugp[0], ugp[4] );
+
+          //  fl[0] = rhoinf * vn;
+          //  fl[1] = rhoinf * vn * uinf + pint * fn[0];
+          //  fl[2] = rhoinf * vn * vinf + pint * fn[1];
+          //  fl[3] = rhoinf * vn * winf + pint * fn[2];
+          //  fl[4] = vn * (rhoEinf + pint);
+          //}
+
+          if(fabs(fn[0]) > 0.9 && fn[0] > 0)
+          {
+            tk::real fp = 0.6;/*inciter::g_inputdeck.get< tag::param, eq,
+                                          tag::farfield_pressure >()[ system ];*/
+            auto rhol = ugp[0];
+            auto ul   = ugp[1] / ugp[0];
+            auto vl   = ugp[2] / ugp[0];
+            auto wl   = ugp[3] / ugp[0];
+            auto rhoE = ugp[4];
+            //auto rhoE = inciter::eos_totalenergy< tag::compflow >
+            //                      ( system, rhol, ul, vl, wl, fp );
+            auto vn   = ul * fn[0] + vl * fn[1] + wl * fn[2];        
+    
+            fl[0] = rhol * vn;
+            fl[1] = rhol * ul * vn + fp * fn[0];
+            fl[2] = rhol * vl * vn + fp * fn[1];
+            fl[3] = rhol * wl * vn + fp * fn[2];
+            fl[4] = vn * (rhoE + fp);
+          }
 
           // Add the surface integration term to the rhs
           update_rhs_bc( ncomp, nmat, offset, ndof, ndofel[el], wt, fn, el, fl,

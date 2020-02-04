@@ -211,6 +211,7 @@ class Transporter : public CBase_Transporter {
       p | m_npoin;
       p | m_t;
       p | m_it;
+      p | m_diag0;
       p | m_meshvol;
       p | m_minstat;
       p | m_maxstat;
@@ -237,6 +238,7 @@ class Transporter : public CBase_Transporter {
     std::size_t m_npoin;                 //!< Total number mesh points
     tk::real m_t;                        //!< Physical time
     uint64_t m_it;                       //!< Iteration count
+    tk::real m_diag0;                    //!< Residual for density
     //! Total mesh volume
     tk::real m_meshvol;
     //! Minimum mesh statistics

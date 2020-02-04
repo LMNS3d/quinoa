@@ -55,7 +55,8 @@ ElemDiagnostics::compute( Discretization& d,
                           const std::size_t nchGhost,
                           const tk::Fields& geoElem,
                           const std::vector< std::size_t >& ndofel,
-                          const tk::Fields& u ) const
+                          const tk::Fields& u,
+                          const tk::Fields& Res ) const
 // *****************************************************************************
 //  Compute diagnostics, e.g., residuals, norms of errors, etc.
 //! \param[in] d Discretization base class to read from
@@ -63,6 +64,7 @@ ElemDiagnostics::compute( Discretization& d,
 //! \param[in] geoElem Element geometry
 //! \param[in] ndofel Vector of local number of degrees of freedom
 //! \param[in] u Current solution vector
+//! \param[in] Res Residual of density
 //! \return True if diagnostics have been computed
 //! \details Diagnostics are defined as some norm, e.g., L2 norm, of a quantity,
 //!    computed in mesh elements, A, as ||A||_2 = sqrt[ sum_i(A_i)^2 V_i ],
@@ -90,7 +92,7 @@ ElemDiagnostics::compute( Discretization& d,
       diag( NUMDIAG, std::vector< tk::real >( u.nprop()/rdof, 0.0 ) );
 
     // Compute diagnostics for DG
-    compute_diag(d, rdof, nchGhost, geoElem, ndofel, u, diag);
+    compute_diag(d, rdof, nchGhost, geoElem, ndofel, u, Res, diag);
 
     // Append diagnostics vector with metadata on the current time step
     // ITER: Current iteration count (only the first entry is used)
@@ -119,6 +121,7 @@ ElemDiagnostics::compute_diag( const Discretization& d,
                                const tk::Fields& geoElem,
                                const std::vector< std::size_t >& ndofel,
                                const tk::Fields& u,
+                               const tk::Fields& Res,
                                std::vector< std::vector< tk::real > >& diag ) const
 // *****************************************************************************
 //  Compute diagnostics, e.g., residuals, norms of errors, etc. for DG
@@ -128,6 +131,7 @@ ElemDiagnostics::compute_diag( const Discretization& d,
 //! \param[in] geoElem Element geometry
 //! \param[in] ndofel Vector of local number of degrees of freedom
 //! \param[in] u Current solution vector
+//! \param[in] Res Residual of density
 //! \param[in,out] diag Diagnostics vector
 // *****************************************************************************
 {
@@ -140,6 +144,9 @@ ElemDiagnostics::compute_diag( const Discretization& d,
 
   for (std::size_t e=0; e<u.nunk()-nchGhost; ++e)
   {
+    // Compute the residual
+    diag[RES][0] += Res(e, 0, 0) * Res(e, 0, 0);
+
     // Number of quadrature points for volume integration
     auto ng = tk::NGdiag(ndofel[e]);
 
