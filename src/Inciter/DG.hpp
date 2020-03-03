@@ -232,6 +232,8 @@ class DG : public CBase_DG {
                           tk::UnsMesh::Hash<3>,
                           tk::UnsMesh::Eq<3> >;
 
+    //! Total number of Runge-Kutta stages
+    static const std::size_t m_rkstages = 4;
     //! Discretization proxy
     CProxy_Discretization m_disc;
     //! Counter for face adjacency communication map
@@ -262,7 +264,7 @@ class DG : public CBase_DG {
     //! Left-hand side mass-matrix which is a diagonal matrix
     tk::Fields m_lhs;
     //! Vector of right-hand side
-    tk::Fields m_rhs;
+    std::array< tk::Fields, m_rkstages-1 > m_rhs;
     //! Counter for number of faces on this chare (including chare boundaries)
     std::size_t m_nfac;
     //! Counter for number of unknowns on this chare (including ghosts)

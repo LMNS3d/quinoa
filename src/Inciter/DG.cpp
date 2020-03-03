@@ -37,8 +37,12 @@ extern ctr::InputDeck g_inputdeck_defaults;
 extern std::vector< DGPDE > g_dgpde;
 
 //! Runge-Kutta coefficients
-static const std::array< std::array< tk::real, 3 >, 2 >
-  rkcoef{{ {{ 0.0, 3.0/4.0, 1.0/3.0 }}, {{ 1.0, 1.0/4.0, 2.0/3.0 }} }};
+static const tk::real grk = 1.0 - 1.0/std::sqrt(2.0);
+static const std::array< std::array< tk::real, 3 >, 4 >
+  rkcoef{{ {{ 0.0, 0.0, 0.0 }}, {{ 1.0, 0.0, 0.0 }}, {{ 1.0/4.0, 1.0/4.0, 0.0 }},
+    {{ 1.0/6.0, 1.0/6.0, 2.0/3.0 }} }},
+  dirkcoeff{{ {{ grk, 0.0, 0.0 }}, {{ 1.0-2.0*grk, grk, 0.0 }},
+    {{ 0.5-grk, 0.0, grk }}, {{ 1.0/6.0, 1.0/6.0, 2.0/3.0 }} }};
 
 } // inciter::
 
@@ -69,7 +73,7 @@ DG::DG( const CProxy_Discretization& disc,
   m_lhs( m_u.nunk(),
          g_inputdeck.get< tag::discr, tag::ndof >()*
          g_inputdeck.get< tag::component >().nprop() ),
-  m_rhs( m_u.nunk(), m_lhs.nprop() ),
+  m_rhs(),
   m_nfac( m_fd.Inpofa().size()/3 ),
   m_nunk( m_u.nunk() ),
   m_ncoord( Disc()->Coord()[0].size() ),
@@ -95,6 +99,9 @@ DG::DG( const CProxy_Discretization& disc,
 //! \param[in] triinpoel Boundary-face connectivity
 // *****************************************************************************
 {
+  for (std::size_t i=0; i<m_rkstages-1; ++i)
+    m_rhs[i] = tk::Fields( m_u.nunk(), m_lhs.nprop() );
+
   usesAtSync = true;    // enable migration at AtSync
 
   // Enable SDAG wait for setting up chare boundary faces
@@ -912,7 +919,8 @@ DG::adj()
   m_un.resize( m_nunk );
   m_p.resize( m_nunk );
   m_lhs.resize( m_nunk );
-  m_rhs.resize( m_nunk );
+  for (std::size_t i=0; i<m_rkstages-1; ++i)
+    m_rhs[i].resize( m_nunk );
 
   // Create a mapping between local ghost tet ids and zero-based boundary ids
   std::vector< std::size_t > c( tk::sumvalsize( m_ghost ) );
@@ -1584,21 +1592,30 @@ DG::solve( tk::real newdt )
   // Update Un
   if (m_stage == 0) m_un = m_u;
 
-  for (const auto& eq : g_dgpde)
-    eq.rhs( d->T(), m_geoFace, m_geoElem, m_fd, d->Inpoel(), d->Coord(), m_u,
-            m_p, m_ndof, m_rhs );
+  if (m_stage > 0)
+  {
+    for (const auto& eq : g_dgpde)
+      eq.rhs( d->T(), m_geoFace, m_geoElem, m_fd, d->Inpoel(), d->Coord(), m_u,
+              m_p, m_ndof, m_rhs[m_stage-1] );
+  }
 
-  // Explicit time-stepping using RK3 to discretize time-derivative
-  for(std::size_t e=0; e<m_nunk; ++e)
-    for(std::size_t c=0; c<neq; ++c)
-      for (std::size_t k=0; k<ndof; ++k)
-      {
-        auto rmark = c*rdof+k;
-        auto mark = c*ndof+k;
-        m_u(e, rmark, 0) =  rkcoef[0][m_stage] * m_un(e, rmark, 0)
-          + rkcoef[1][m_stage] * ( m_u(e, rmark, 0)
-            + d->Dt() * m_rhs(e, mark, 0)/m_lhs(e, mark, 0) );
-      }
+  // initialize U to Un for RK-update
+  m_u = m_un;
+
+  // Explicit RK update of U
+  if (m_stage > 0)
+    for(std::size_t s=0; s<m_stage; ++s)
+    {
+      for(std::size_t e=0; e<m_nunk; ++e)
+        for(std::size_t c=0; c<neq; ++c)
+          for (std::size_t k=0; k<ndof; ++k)
+          {
+            auto rmark = c*rdof+k;
+            auto mark = c*ndof+k;
+            m_u(e, rmark, 0) += rkcoef[m_stage][s] * d->Dt()
+              * m_rhs[s](e, mark, 0)/m_lhs(e,mark,0);
+          }
+    }
 
   // Update primitives based on the evolved solution
   for (const auto& eq : g_dgpde)
@@ -1607,7 +1624,7 @@ DG::solve( tk::real newdt )
     eq.cleanTraceMaterial( m_geoElem, m_u, m_p, m_fd.Esuel().size()/4 );
   }
 
-  if (m_stage < 2) {
+  if (m_stage < m_rkstages-1) {
 
     // continue with next time step stage
     stage();
@@ -1699,7 +1716,9 @@ DG::resizePostAMR(
   m_u.resize( nelem, nprop );
   m_un.resize( nelem, nprop );
   m_lhs.resize( nelem, nprop );
-  m_rhs.resize( nelem, nprop );
+
+  for (std::size_t i=0; i<m_rkstages-1; ++i)
+    m_rhs[i].resize( nelem, nprop );
 
   m_fd = FaceData( d->Inpoel(), bface, tk::remap(triinpoel,d->Lid()) );
 
@@ -1767,7 +1786,7 @@ DG::stage()
 
   // if not all Runge-Kutta stages complete, continue to next time stage,
   // otherwise output field data to file(s)
-  if (m_stage < 3) next(); else out();
+  if (m_stage < m_rkstages) next(); else out();
 }
 
 void
