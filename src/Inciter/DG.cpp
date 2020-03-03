@@ -1525,6 +1525,8 @@ DG::dt()
       }
 
       mindt *= g_inputdeck.get< tag::discr, tag::cfl >();
+
+      if (d->It() < 1000) mindt *= static_cast< tk::real >(d->It()+1)*0.001;
     }
   }
   else

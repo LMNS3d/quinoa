@@ -304,10 +304,41 @@ pressureRelaxationInt( ncomp_t system,
       auto ugp = eval_state( ncomp, offset, rdof, dof_el, e, U, B );
       auto pgp = eval_state( nprim, offset, rdof, dof_el, e, P, B );
 
-      // get bulk properties
-      real rhob(0.0);
+      auto al_eps = 1.0e-12;
+
+      // get majority material, and correct trace materials
+      std::size_t kmax(0);
+      real almax(0.0), al_corr(0.0),
+        rmin(std::numeric_limits< tk::real >::max()),
+        rmax(std::numeric_limits< tk::real >::min());
       for (std::size_t k=0; k<nmat; ++k)
-        rhob += ugp[densityIdx(nmat, k)];
+      {
+        const auto al = ugp[volfracIdx(nmat, k)];
+        rmin = std::min(rmin, ugp[densityIdx(nmat, k)]/al);
+        rmax = std::max(rmax, ugp[densityIdx(nmat, k)]/al);
+
+        if (al > almax)
+        {
+          almax = al;
+          kmax = k;
+        }
+
+        if (al < al_eps)
+        {
+          al_corr -= al_eps - al;
+          ugp[volfracIdx(nmat, k)] = al_eps;
+          ugp[densityIdx(nmat, k)] *= al_eps/al;
+          pgp[pressureIdx(nmat, k)] *= al_eps/al;
+        }
+      }
+
+      ugp[volfracIdx(nmat, kmax)] += al_corr;
+      ugp[densityIdx(nmat, kmax)] *= ugp[volfracIdx(nmat, kmax)]/almax;
+      pgp[pressureIdx(nmat, kmax)] *= ugp[volfracIdx(nmat, kmax)]/almax;
+      almax = ugp[volfracIdx(nmat, kmax)];
+
+      auto rhoratio = 1.0; //rmin/rmax;
+      auto apow = 1.0;
 
       // get pressures and bulk modulii
       real pb(0.0), nume(0.0), deno(0.0), trelax(0.0);
@@ -323,9 +354,9 @@ pressureRelaxationInt( ncomp_t system,
         pb += apmat[k];
 
         // relaxation parameters
-        trelax = std::max(trelax, ct*dx/amat);
-        nume += alphamat * apmat[k] / kmat[k];
-        deno += alphamat * alphamat / kmat[k];
+        trelax = std::max(trelax, ct*rhoratio*dx/amat);
+        nume += std::pow(alphamat, apow) * apmat[k] / kmat[k];
+        deno += std::pow(alphamat, apow+1.0) / kmat[k];
       }
       auto p_relax = nume/deno;
 
@@ -334,7 +365,8 @@ pressureRelaxationInt( ncomp_t system,
       for (std::size_t k=0; k<nmat; ++k)
       {
         auto s_alpha = (apmat[k]-p_relax*ugp[volfracIdx(nmat, k)])
-          * (ugp[volfracIdx(nmat, k)]/kmat[k]) / trelax;
+          * std::pow(ugp[volfracIdx(nmat, k)], apow)
+          * std::pow(almax, 1.0-apow) / (trelax*kmat[k]);
         s_prelax[volfracIdx(nmat, k)] = s_alpha;
         s_prelax[energyIdx(nmat, k)] = - pb*s_alpha;
       }

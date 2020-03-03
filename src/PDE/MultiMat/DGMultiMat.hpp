@@ -40,6 +40,7 @@
 #include "MultiMat/MultiMatIndexing.hpp"
 #include "Reconstruction.hpp"
 #include "Limiter.hpp"
+#include "NoWarning/charm.hpp"
 
 namespace inciter {
 
@@ -208,7 +209,7 @@ class MultiMat {
               "discretizations not set up for multimat cleanTraceMaterial()" );
 
       auto al_eps = 1.0e-14;
-      auto neg_density = false;
+      auto neg_density(false), nonunit_volfrac(false);
 
       for (std::size_t e=0; e<nielem; ++e)
       {
@@ -233,9 +234,11 @@ class MultiMat {
           unk(e, densityDofIdx(nmat, kmax, rdof, 0), m_offset), u, v, w,
           unk(e, energyDofIdx(nmat, kmax, rdof, 0), m_offset), almax, kmax);
 
+        auto alpha_sum(0.0);
+
         for (std::size_t k=0; k<nmat; ++k)
         {
-          if (unk(e, volfracDofIdx(nmat, k, rdof, 0), m_offset) < al_eps)
+          if (unk(e, volfracDofIdx(nmat, k, rdof, 0), m_offset) <= al_eps)
           {
             auto rhomat = eos_density< tag::multimat >(m_system, pmax, tmax, k);
             auto rhoEmat = eos_totalenergy< tag::multimat >(m_system, rhomat,
@@ -274,15 +277,27 @@ class MultiMat {
               << std::endl;
           };
 
-          if (arho < 0.0)
+          if ((alpha > al_eps && arho < 0.0) || std::isnan(arho))
           {
             neg_density = true;
             screenout();
           }
+
+          alpha_sum += alpha;
         }
+
+        //if (std::fabs(alpha_sum-1.0) > 1e-14)
+        //{
+        //  nonunit_volfrac = true;
+        //  std::cout << "Element centroid:          " << geoElem(e,1,0) << ", "
+        //    << geoElem(e,2,0) << ", " << geoElem(e,3,0) << std::endl;
+        //  std::cout << "Error in volume-fractions: " << std::setprecision(16)
+        //    << alpha_sum-1.0 << std::endl;
+        //}
       }
 
       if (neg_density) Throw("Negative partial density.");
+      if (nonunit_volfrac) Throw("Volume fractions not summing to 1.");
     }
 
     //! Reconstruct second-order solution from first-order
@@ -578,7 +593,7 @@ class MultiMat {
         a = 0.0;
         for (std::size_t k=0; k<nmat; ++k)
         {
-          if (ugp[volfracIdx(nmat, k)] > 1.0e-08) {
+          if (ugp[volfracIdx(nmat, k)] > 1.0e-06) {
             a = std::max( a, eos_soundspeed< tag::multimat >( 0,
               ugp[densityIdx(nmat, k)], pgp[pressureIdx(nmat, k)],
               ugp[volfracIdx(nmat, k)], k ) );
@@ -611,7 +626,7 @@ class MultiMat {
           a = 0.0;
           for (std::size_t k=0; k<nmat; ++k)
           {
-            if (ugp[volfracIdx(nmat, k)] > 1.0e-08) {
+            if (ugp[volfracIdx(nmat, k)] > 1.0e-06) {
               a = std::max( a, eos_soundspeed< tag::multimat >( 0,
                 ugp[densityIdx(nmat, k)], pgp[pressureIdx(nmat, k)],
                 ugp[volfracIdx(nmat, k)], k ) );
