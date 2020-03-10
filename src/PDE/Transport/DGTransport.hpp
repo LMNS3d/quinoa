@@ -279,17 +279,19 @@ class Transport {
     }
 
     //! Compute physical source terms
-//    //! \param[in] geoElem Element geometry array
+//    //! \param[in] e Element for which source term is to be computed
+//    //! \param[in] volElem Element volume
 //    //! \param[in] U Solution vector at recent time step
 //    //! \param[in] P Primitive vector at recent time step
-//    //! \param[in] ndofel Vector of local number of degrees of freedome
+//    //! \param[in] ndofel Local number of degrees of freedome
 //    //! \param[in,out] S Physical source term vector computed
     //! \details This function computes and stores the physical source terms,
     //!   and is currently unused for transport.
-    void phy_src( const tk::Fields& /*geoElem*/,
+    void phy_src( std::size_t /*e*/,
+                  tk::real /*volElem*/,
                   const tk::Fields& /*U*/,
                   const tk::Fields& /*P*/,
-                  const std::vector< std::size_t >& /*ndofel*/,
+                  std::size_t /*ndofel*/,
                   tk::Fields& /*S*/ ) const {}
 
     //! Compute Jacobian of physical source terms

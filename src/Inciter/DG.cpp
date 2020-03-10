@@ -1610,13 +1610,17 @@ DG::solve( tk::real newdt )
       eq.rhs( d->T(), m_geoFace, m_geoElem, m_fd, d->Inpoel(), d->Coord(), m_u,
               m_p, m_ndof, m_rhs[m_stage-1] );
 
-      eq.phy_src( m_geoElem, m_u, m_p, m_ndof, m_src[m_stage-1] );
+      for (std::size_t e=0; e<m_u.nunk(); ++e)
+        eq.phy_src( e, m_geoElem(e, 0 ,0), m_u, m_p, m_ndof[e],
+          m_src[m_stage-1] );
     }
   }
 
   // local storage
   std::vector< tk::real > jac(m_lhs.nprop(), 0.0), du(m_lhs.nprop(), 0.0);
   tk::Fields rhs_semiimpl(1, m_lhs.nprop()), Rexp(1, m_lhs.nprop());
+  tk::Fields upert(1, m_u.nprop()), ppert(1, m_u.nprop()),
+    srcpert(1, m_lhs.nprop());
 
   // IMEX-RK update of U
   // --------------------------------------------------------------------------
@@ -1649,7 +1653,40 @@ DG::solve( tk::real newdt )
     //    important to note that in every subcycle, the volume-fraction has to
     //    be updated first, followed by the material energy.
 
-    for (std::size_t subcycle=0; subcycle<1; ++subcycle)
+    // Source term Jacobian by finite-differences
+    // i) get perturbed solutions u+eps (and p+eps) for cell e
+    // ii) compute source terms based on perturbed solutions m_u and m_p
+    // iii) get Jacobian as dS_i/dU_j = (S(u+eps)-S(u)) / eps
+
+    // i)
+    upert.fill(0.0);
+    ppert.fill(0.0);
+    for (std::size_t c=0; c<neq; ++c)
+    {
+      for (std::size_t k=0; k<ndof; ++k)
+      {
+        auto rmark = c*rdof+k;
+        upert(0, rmark, 0) = m_u(e, rmark, 0)
+          + 1.0e-6*std::fabs(m_u(e, rmark, 0));
+      }
+    }
+    for (const auto& eq : g_dgpde) eq.updatePrimitives(0, upert, ppert);
+    // at this point the un-reconstructed solutions have been perturbed
+
+    // ii)
+    for (const auto& eq : g_dgpde)
+      eq.phy_src( 0, m_geoElem(e, 0 ,0), upert, ppert, m_ndof[e], srcpert );
+
+    // iii)
+    for (std::size_t i=0; i<jac.size(); ++i)
+    {
+      for (std::size_t j=0; j<jac[i].size(); ++j)
+      {
+        jac[i][j] = (srcpert(0, i, 0) - m_src[s](e, i, 0))/pert[j];
+      }
+    }
+
+    for (std::size_t subcycle=0; subcycle<10; ++subcycle)
     {
       if (m_stage < m_rkstages-1)
       {

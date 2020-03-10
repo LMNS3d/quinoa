@@ -218,13 +218,14 @@ update_rhs_ncn(
 void
 pressureRelaxationInt( ncomp_t system,
                        std::size_t nmat,
+                       std::size_t e,
                        ncomp_t offset,
                        const std::size_t ndof,
                        const std::size_t rdof,
-                       const Fields& geoElem,
+                       real volElem,
                        const Fields& U,
                        const Fields& P,
-                       const std::vector< std::size_t >& ndofel,
+                       std::size_t ndofel,
                        const tk::real ct,
                        Fields& R )
 // *****************************************************************************
@@ -238,13 +239,14 @@ pressureRelaxationInt( ncomp_t system,
 //!   for Numerical Methods in Fluids, 82(10), 689-706.
 //! \param[in] system Equation system index
 //! \param[in] nmat Number of materials in this PDE system
+//! \param[in] e Element for which pressure relaxation is to be computed
 //! \param[in] offset Offset this PDE system operates from
 //! \param[in] ndof Maximum number of degrees of freedom
 //! \param[in] rdof Maximum number of reconstructed degrees of freedom
-//! \param[in] geoElem Element geometry array
+//! \param[in] volElem Element volume
 //! \param[in] U Solution vector at recent time step
 //! \param[in] P Vector of primitive quantities at recent time step
-//! \param[in] ndofel Vector of local number of degrees of freedome
+//! \param[in] ndofel Local number of degrees of freedome
 //! \param[in] ct Pressure relaxation time-scale for this system
 //! \param[in,out] R Right-hand side vector added to
 // *****************************************************************************
@@ -260,70 +262,67 @@ pressureRelaxationInt( ncomp_t system,
   auto nprim = P.nprop()/rdof;
 
   // compute volume integrals
-  for (std::size_t e=0; e<U.nunk(); ++e)
+  auto dx = std::cbrt(volElem);
+  auto ng = NGvol(ndofel);
+
+  // arrays for quadrature points
+  std::array< std::vector< real >, 3 > coordgp;
+  std::vector< real > wgp;
+
+  coordgp[0].resize( ng );
+  coordgp[1].resize( ng );
+  coordgp[2].resize( ng );
+  wgp.resize( ng );
+
+  GaussQuadratureTet( ng, coordgp, wgp );
+
+  // Compute the derivatives of basis function for DG(P1)
+  std::array< std::vector<real>, 3 > dBdx;
+
+  // Gaussian quadrature
+  for (std::size_t igp=0; igp<ng; ++igp)
   {
-    auto dx = std::cbrt(geoElem(e, 0, 0));
-    auto ng = NGvol(ndofel[e]);
-
-    // arrays for quadrature points
-    std::array< std::vector< real >, 3 > coordgp;
-    std::vector< real > wgp;
-
-    coordgp[0].resize( ng );
-    coordgp[1].resize( ng );
-    coordgp[2].resize( ng );
-    wgp.resize( ng );
-
-    GaussQuadratureTet( ng, coordgp, wgp );
-
-    // Compute the derivatives of basis function for DG(P1)
-    std::array< std::vector<real>, 3 > dBdx;
-
-    // Gaussian quadrature
-    for (std::size_t igp=0; igp<ng; ++igp)
+    // If an rDG method is set up (P0P1), then, currently we compute the P1
+    // basis functions and solutions by default. This implies that P0P1 is
+    // unsupported in the p-adaptive DG (PDG).
+    std::size_t dof_el;
+    if (rdof > ndof)
     {
-      // If an rDG method is set up (P0P1), then, currently we compute the P1
-      // basis functions and solutions by default. This implies that P0P1 is
-      // unsupported in the p-adaptive DG (PDG).
-      std::size_t dof_el;
-      if (rdof > ndof)
-      {
-        dof_el = rdof;
-      }
-      else
-      {
-        dof_el = ndofel[e];
-      }
-
-      // Compute the basis function
-      auto B =
-        eval_basis( dof_el, coordgp[0][igp], coordgp[1][igp], coordgp[2][igp] );
-
-      auto wt = wgp[igp] * geoElem(e, 0, 0);
-
-      auto ugp = eval_state( ncomp, offset, rdof, dof_el, e, U, B );
-      auto pgp = eval_state( nprim, offset, rdof, dof_el, e, P, B );
-
-      // calculate equilibrium pressure and builk-modulii
-      std::vector< real > kmat(nmat, 0.0);
-      real apow(1.0), almax(0.0), pb(0.0), trelax(0.0), p_relax(0.0);
-      equilibriumPressure(system, nmat, ct, dx, apow, ugp, pgp, kmat, almax, pb,
-        trelax, p_relax);
-
-      // compute pressure relaxation terms
-      std::vector< real > s_prelax(ncomp, 0.0);
-      for (std::size_t k=0; k<nmat; ++k)
-      {
-        auto s_alpha = (pgp[pressureIdx(nmat, k)]
-          -p_relax*ugp[volfracIdx(nmat, k)])
-          * std::pow(ugp[volfracIdx(nmat, k)], apow)
-          * std::pow(almax, 1.0-apow) / (trelax*kmat[k]);
-        s_prelax[volfracIdx(nmat, k)] = s_alpha;
-        s_prelax[energyIdx(nmat, k)] = - pb*s_alpha;
-      }
-
-      update_rhs_ncn( ncomp, offset, ndof, ndofel[e], wt, e, dBdx, s_prelax, R );
+      dof_el = rdof;
     }
+    else
+    {
+      dof_el = ndofel;
+    }
+
+    // Compute the basis function
+    auto B =
+      eval_basis( dof_el, coordgp[0][igp], coordgp[1][igp], coordgp[2][igp] );
+
+    auto wt = wgp[igp] * volElem;
+
+    auto ugp = eval_state( ncomp, offset, rdof, dof_el, e, U, B );
+    auto pgp = eval_state( nprim, offset, rdof, dof_el, e, P, B );
+
+    // calculate equilibrium pressure and builk-modulii
+    std::vector< real > kmat(nmat, 0.0);
+    real apow(1.0), almax(0.0), pb(0.0), trelax(0.0), p_relax(0.0);
+    equilibriumPressure(system, nmat, ct, dx, apow, ugp, pgp, kmat, almax, pb,
+      trelax, p_relax);
+
+    // compute pressure relaxation terms
+    std::vector< real > s_prelax(ncomp, 0.0);
+    for (std::size_t k=0; k<nmat; ++k)
+    {
+      auto s_alpha = (pgp[pressureIdx(nmat, k)]
+        -p_relax*ugp[volfracIdx(nmat, k)])
+        * std::pow(ugp[volfracIdx(nmat, k)], apow)
+        * std::pow(almax, 1.0-apow) / (trelax*kmat[k]);
+      s_prelax[volfracIdx(nmat, k)] = s_alpha;
+      s_prelax[energyIdx(nmat, k)] = - pb*s_alpha;
+    }
+
+    update_rhs_ncn( ncomp, offset, ndof, ndofel, wt, e, dBdx, s_prelax, R );
   }
 }
 

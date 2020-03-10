@@ -59,13 +59,14 @@ update_rhs_ncn( ncomp_t ncomp,
 void
 pressureRelaxationInt( ncomp_t system,
                        std::size_t nmat,
+                       std::size_t e,
                        ncomp_t offset,
                        const std::size_t ndof,
                        const std::size_t rdof,
-                       const Fields& geoElem,
+                       real volElem,
                        const Fields& U,
                        const Fields& P,
-                       const std::vector< std::size_t >& ndofel,
+                       std::size_t ndofel,
                        const tk::real ct,
                        Fields& R );
 

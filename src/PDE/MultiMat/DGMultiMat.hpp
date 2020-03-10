@@ -516,11 +516,12 @@ class MultiMat {
                               R );
     }
 
-    //! Compute physical source terms
-    //! \param[in] geoElem Element geometry array
+    //! Compute physical source terms for required element
+    //! \param[in] e Element for which source term is to be computed
+    //! \param[in] volElem Element volume
     //! \param[in] U Solution vector at recent time step
     //! \param[in] P Primitive vector at recent time step
-    //! \param[in] ndofel Vector of local number of degrees of freedome
+    //! \param[in] ndofel Local number of degrees of freedome
     //! \param[in,out] S Physical source term vector computed
     //! \details This functions computes and stores the physical source terms
     //!   for the multi-material system of equations. This is stored separately
@@ -529,10 +530,11 @@ class MultiMat {
     //!   pressure relaxation sources are computed here. Any other
     //!   physics-sources should be added here, if they are to be treated
     //!   implicitly in time.
-    void phy_src( const tk::Fields& geoElem,
+    void phy_src( std::size_t e,
+                  tk::real volElem,
                   const tk::Fields& U,
                   const tk::Fields& P,
-                  const std::vector< std::size_t >& ndofel,
+                  std::size_t ndofel,
                   tk::Fields& S ) const
     {
       const auto ndof = g_inputdeck.get< tag::discr, tag::ndof >();
@@ -540,22 +542,21 @@ class MultiMat {
       const auto nmat =
         g_inputdeck.get< tag::param, tag::multimat, tag::nmat >()[m_system];
 
-      Assert( U.nunk() == S.nunk(), "Number of unknowns in solution "
-              "vector and right-hand side at recent time step incorrect" );
       Assert( S.nprop() == ndof*m_ncomp, "Number of components in right-hand "
               "side vector must equal "+ std::to_string(ndof*m_ncomp) );
       Assert( ndof == 1, "DGP1/2 not set up for multi-material sources" );
 
       // set source term vector to zero
-      S.fill(0.0);
+      for (std::size_t i=0; i<S.nprop(); ++i)
+        S(e, i, m_offset) = 0.0;
 
       // compute finite pressure relaxation terms
       if (g_inputdeck.get< tag::param, tag::multimat, tag::prelax >()[m_system])
       {
         const auto ct = g_inputdeck.get< tag::param, tag::multimat,
                                          tag::prelax_timescale >()[m_system];
-        tk::pressureRelaxationInt( m_system, nmat, m_offset, ndof, rdof,
-                                   geoElem, U, P, ndofel, ct, S );
+        tk::pressureRelaxationInt( m_system, nmat, e, m_offset, ndof, rdof,
+                                   volElem, U, P, ndofel, ct, S );
       }
     }
 

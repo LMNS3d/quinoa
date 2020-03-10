@@ -193,13 +193,14 @@ class DGPDE {
     }
 
     //! Public interface to computing the P1 source term vector
-    void phy_src( const tk::Fields& geoElem,
+    void phy_src( std::size_t e,
+                  tk::real volElem,
                   const tk::Fields& U,
                   const tk::Fields& P,
-                  const std::vector< std::size_t >& ndofel,
+                  std::size_t ndofel,
                   tk::Fields& S ) const
     {
-      self->phy_src( geoElem, U, P, ndofel, S );
+      self->phy_src( e, volElem, U, P, ndofel, S );
     }
 
     //! Public interface to computing the P1 Jacobian of the source term vector
@@ -327,10 +328,11 @@ class DGPDE {
                         const tk::Fields&,
                         const std::vector< std::size_t >&,
                         tk::Fields& ) const = 0;
-      virtual void phy_src( const tk::Fields&,
+      virtual void phy_src( std::size_t,
+                            tk::real,
                             const tk::Fields&,
                             const tk::Fields&,
-                            const std::vector< std::size_t >&,
+                            std::size_t,
                             tk::Fields& ) const = 0;
       virtual void src_Jacobians( std::size_t,
                                   const tk::Fields&,
@@ -432,13 +434,14 @@ class DGPDE {
       {
         data.rhs( t, geoFace, geoElem, fd, inpoel, coord, U, P, ndofel, R );
       }
-      void phy_src( const tk::Fields& geoElem,
+      void phy_src( std::size_t e,
+                    tk::real volElem,
                     const tk::Fields& U,
                     const tk::Fields& P,
-                    const std::vector< std::size_t >& ndofel,
+                    std::size_t ndofel,
                     tk::Fields& S ) const override
       {
-        data.phy_src( geoElem, U, P, ndofel, S );
+        data.phy_src( e, volElem, U, P, ndofel, S );
       }
       void src_Jacobians( std::size_t e,
                           const tk::Fields& geoElem,
