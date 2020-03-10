@@ -118,25 +118,23 @@ class MultiMat {
       tk::mass( m_ncomp, m_offset, ndof, geoElem, l );
     }
 
-    //! Update the primitives for this PDE system
+    //! Update the primitives for given element for this PDE system
+    //! \param[in] e Element whose primitives are to be calculated
     //! \param[in] unk Array of unknowns
     //! \param[in,out] prim Array of primitives
-    //! \param[in] nielem Number of internal elements
     //! \details This function computes and stores the dofs for primitive
     //!   quantities, which are required for obtaining reconstructed states used
     //!   in the Riemann solver. See /PDE/Integrate/Riemann/AUSM.hpp, where the
     //!   normal velocity for advection is calculated from independently
-    //!   reconstructed velocities.
-    void updatePrimitives( const tk::Fields& unk,
-                           tk::Fields& prim,
-                           std::size_t nielem ) const
+    //!   reconstructed velocities. This function works on a given mesh element.
+    void updatePrimitives( std::size_t e,
+                           const tk::Fields& unk,
+                           tk::Fields& prim ) const
     {
       const auto rdof = g_inputdeck.get< tag::discr, tag::rdof >();
       const auto nmat =
         g_inputdeck.get< tag::param, tag::multimat, tag::nmat >()[m_system];
 
-      Assert( unk.nunk() == prim.nunk(), "Number of unknowns in solution "
-              "vector and primitive vector at recent time step incorrect" );
       Assert( unk.nprop() == rdof*m_ncomp, "Number of components in solution "
               "vector must equal "+ std::to_string(rdof*m_ncomp) );
       Assert( prim.nprop() == rdof*nprim(), "Number of components in vector of "
@@ -144,36 +142,33 @@ class MultiMat {
       Assert( (g_inputdeck.get< tag::discr, tag::ndof >()) == 1, "High-order "
               "discretizations not set up for multimat updatePrimitives()" );
 
-      for (std::size_t e=0; e<nielem; ++e)
+      // cell-average bulk density
+      tk::real rhob(0.0);
+      for (std::size_t k=0; k<nmat; ++k)
       {
-        // cell-average bulk density
-        tk::real rhob(0.0);
-        for (std::size_t k=0; k<nmat; ++k)
-        {
-          rhob += unk(e, densityDofIdx(nmat, k, rdof, 0), m_offset);
-        }
+        rhob += unk(e, densityDofIdx(nmat, k, rdof, 0), m_offset);
+      }
 
-        // cell-average velocity
-        std::array< tk::real, 3 >
-          vel{{ unk(e, momentumDofIdx(nmat, 0, rdof, 0), m_offset)/rhob,
-                unk(e, momentumDofIdx(nmat, 1, rdof, 0), m_offset)/rhob,
-                unk(e, momentumDofIdx(nmat, 2, rdof, 0), m_offset)/rhob }};
+      // cell-average velocity
+      std::array< tk::real, 3 >
+        vel{{ unk(e, momentumDofIdx(nmat, 0, rdof, 0), m_offset)/rhob,
+              unk(e, momentumDofIdx(nmat, 1, rdof, 0), m_offset)/rhob,
+              unk(e, momentumDofIdx(nmat, 2, rdof, 0), m_offset)/rhob }};
 
-        for (std::size_t idir=0; idir<3; ++idir)
-        {
-          prim(e, velocityDofIdx(nmat, idir, rdof, 0), m_offset) = vel[idir];
-        }
+      for (std::size_t idir=0; idir<3; ++idir)
+      {
+        prim(e, velocityDofIdx(nmat, idir, rdof, 0), m_offset) = vel[idir];
+      }
 
-        // cell-average material pressure
-        for (std::size_t k=0; k<nmat; ++k)
-        {
-          tk::real arhomat = unk(e, densityDofIdx(nmat, k, rdof, 0), m_offset);
-          tk::real arhoemat = unk(e, energyDofIdx(nmat, k, rdof, 0), m_offset);
-          tk::real alphamat = unk(e, volfracDofIdx(nmat, k, rdof, 0), m_offset);
-          prim(e, pressureDofIdx(nmat, k, rdof, 0), m_offset) =
-            eos_pressure< tag::multimat >( m_system, arhomat, vel[0], vel[1],
-              vel[2], arhoemat, alphamat, k );
-        }
+      // cell-average material pressure
+      for (std::size_t k=0; k<nmat; ++k)
+      {
+        tk::real arhomat = unk(e, densityDofIdx(nmat, k, rdof, 0), m_offset);
+        tk::real arhoemat = unk(e, energyDofIdx(nmat, k, rdof, 0), m_offset);
+        tk::real alphamat = unk(e, volfracDofIdx(nmat, k, rdof, 0), m_offset);
+        prim(e, pressureDofIdx(nmat, k, rdof, 0), m_offset) =
+          eos_pressure< tag::multimat >( m_system, arhomat, vel[0], vel[1],
+            vel[2], arhoemat, alphamat, k );
       }
     }
 
@@ -519,6 +514,40 @@ class MultiMat {
       tk::nonConservativeInt( m_system, nmat, m_offset, ndof, rdof, inpoel,
                               coord, geoElem, U, P, riemannDeriv, ndofel,
                               R );
+    }
+
+    //! Compute physical source terms
+    //! \param[in] geoElem Element geometry array
+    //! \param[in] U Solution vector at recent time step
+    //! \param[in] P Primitive vector at recent time step
+    //! \param[in] ndofel Vector of local number of degrees of freedome
+    //! \param[in,out] S Physical source term vector computed
+    //! \details This functions computes and stores the physical source terms
+    //!   for the multi-material system of equations. This is stored separately
+    //!   from the RHS to allow for implicit-explicit time-stepping, with these
+    //!   sources computed implicitly. Currently, only the
+    //!   pressure relaxation sources are computed here. Any other
+    //!   physics-sources should be added here, if they are to be treated
+    //!   implicitly in time.
+    void phy_src( const tk::Fields& geoElem,
+                  const tk::Fields& U,
+                  const tk::Fields& P,
+                  const std::vector< std::size_t >& ndofel,
+                  tk::Fields& S ) const
+    {
+      const auto ndof = g_inputdeck.get< tag::discr, tag::ndof >();
+      const auto rdof = g_inputdeck.get< tag::discr, tag::rdof >();
+      const auto nmat =
+        g_inputdeck.get< tag::param, tag::multimat, tag::nmat >()[m_system];
+
+      Assert( U.nunk() == S.nunk(), "Number of unknowns in solution "
+              "vector and right-hand side at recent time step incorrect" );
+      Assert( S.nprop() == ndof*m_ncomp, "Number of components in right-hand "
+              "side vector must equal "+ std::to_string(ndof*m_ncomp) );
+      Assert( ndof == 1, "DGP1/2 not set up for multi-material sources" );
+
+      // set source term vector to zero
+      S.fill(0.0);
 
       // compute finite pressure relaxation terms
       if (g_inputdeck.get< tag::param, tag::multimat, tag::prelax >()[m_system])
@@ -526,7 +555,87 @@ class MultiMat {
         const auto ct = g_inputdeck.get< tag::param, tag::multimat,
                                          tag::prelax_timescale >()[m_system];
         tk::pressureRelaxationInt( m_system, nmat, m_offset, ndof, rdof,
-                                   geoElem, U, P, ndofel, ct, R );
+                                   geoElem, U, P, ndofel, ct, S );
+      }
+    }
+
+    //! Compute Jacobian of physical source terms
+    //! \param[in] e Element for which Jacobian is to be computed
+    //! \param[in] geoElem Element geometry array
+    //! \param[in] U Solution vector at recent time step
+    //! \param[in] P Primitive vector at recent time step
+    //! \param[in] ndofel Vector of local number of degrees of freedome
+    //! \param[in,out] J Physical source term Jacobian
+    //! \param[in,out] rhs_si RHS resulting from semi-implicit treatment for
+    //!   linear assumption
+    //! \details This functions computes and stores the Jacobian of physical
+    //!   source terms for the multi-material system of equations. This is
+    //!   stored separately to allow for implicit treatment of these sources.
+    //!   Currently, a simple volume-fraction-only implicit treatment for the
+    //!   pressure relaxation sources is used. If any other physics-sources
+    //!   need to be treated implicitly, their Jacobians should be added here.
+    void src_Jacobians( std::size_t e,
+                        const tk::Fields& geoElem,
+                        const tk::Fields& U,
+                        const tk::Fields& P,
+                        const std::vector< std::size_t >& ndofel,
+                        std::vector< tk::real >& J,
+                        tk::Fields& rhs_si ) const
+    {
+      const auto ndof = g_inputdeck.get< tag::discr, tag::ndof >();
+      const auto rdof = g_inputdeck.get< tag::discr, tag::rdof >();
+      const auto nmat =
+        g_inputdeck.get< tag::param, tag::multimat, tag::nmat >()[m_system];
+
+      Assert( J.size() == ndof*m_ncomp, "Number of components in Jacobian "
+              "side vector must equal "+ std::to_string(ndof*m_ncomp) );
+      Assert( ndof == 1, "DGP1/2 not set up for multi-material sources" );
+
+      // If an rDG method is set up (P0P1), then, currently we compute the P1
+      // basis functions and solutions by default. This implies that P0P1 is
+      // unsupported in the p-adaptive DG (PDG).
+      std::size_t dof_el;
+      if (rdof > ndof)
+      {
+        dof_el = ndof;
+      }
+      else
+      {
+        dof_el = ndofel[e];
+      }
+
+      // set source term vector to zero
+      for (auto& ji:J) ji = 0.0;
+      rhs_si.fill(0.0);
+
+      // compute finite pressure relaxation terms
+      if (g_inputdeck.get< tag::param, tag::multimat, tag::prelax >()[m_system])
+      {
+        const auto ct = g_inputdeck.get< tag::param, tag::multimat,
+                                         tag::prelax_timescale >()[m_system];
+        tk::pressureRelaxationJac( m_system, nmat, e, m_offset, ndof, rdof,
+                                   geoElem, U, P, dof_el, ct, J, rhs_si );
+      }
+    }
+
+    void semi_impl(std::size_t e,
+      tk::Fields& rhs_si,
+      const tk::Fields& U) const
+    //! Get dS/d(volfrac) * volfrac, which is the semi-implicit RHS
+    {
+      const auto ndof = g_inputdeck.get< tag::discr, tag::ndof >();
+      const auto rdof = g_inputdeck.get< tag::discr, tag::rdof >();
+      const auto nmat =
+        g_inputdeck.get< tag::param, tag::multimat, tag::nmat >()[m_system];
+
+      for (std::size_t k=0; k<nmat; ++k)
+      {
+        rhs_si(0, volfracDofIdx(nmat, k, ndof, 0), m_offset) *=
+          U(e, volfracDofIdx(nmat, k, rdof, 0), m_offset);
+        rhs_si(0, densityDofIdx(nmat, k, ndof, 0), m_offset) *=
+          U(e, volfracDofIdx(nmat, k, rdof, 0), m_offset);
+        rhs_si(0, energyDofIdx(nmat, k, ndof, 0), m_offset) *=
+          U(e, volfracDofIdx(nmat, k, rdof, 0), m_offset);
       }
     }
 
@@ -593,7 +702,7 @@ class MultiMat {
         a = 0.0;
         for (std::size_t k=0; k<nmat; ++k)
         {
-          if (ugp[volfracIdx(nmat, k)] > 1.0e-06) {
+          if (ugp[volfracIdx(nmat, k)] > 1.0e-08) {
             a = std::max( a, eos_soundspeed< tag::multimat >( 0,
               ugp[densityIdx(nmat, k)], pgp[pressureIdx(nmat, k)],
               ugp[volfracIdx(nmat, k)], k ) );
@@ -626,7 +735,7 @@ class MultiMat {
           a = 0.0;
           for (std::size_t k=0; k<nmat; ++k)
           {
-            if (ugp[volfracIdx(nmat, k)] > 1.0e-06) {
+            if (ugp[volfracIdx(nmat, k)] > 1.0e-08) {
               a = std::max( a, eos_soundspeed< tag::multimat >( 0,
                 ugp[densityIdx(nmat, k)], pgp[pressureIdx(nmat, k)],
                 ugp[volfracIdx(nmat, k)], k ) );

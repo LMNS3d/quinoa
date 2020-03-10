@@ -20,9 +20,11 @@
 #include "Types.hpp"
 #include "Fields.hpp"
 #include "UnsMesh.hpp"
+#include "Inciter/InputDeck/InputDeck.hpp"
 
 namespace tk {
 
+extern inciter::ctr::InputDeck g_inputdeck;
 using ncomp_t = kw::ncomp::info::expect::type;
 
 //! Compute volume integrals of non-conservative terms for multi-material DG
@@ -66,6 +68,37 @@ pressureRelaxationInt( ncomp_t system,
                        const std::vector< std::size_t >& ndofel,
                        const tk::real ct,
                        Fields& R );
+
+//! Compute element Jacobian of pressure relaxation terms in multi-material DG
+void
+pressureRelaxationJac( ncomp_t system,
+                       std::size_t nmat,
+                       std::size_t e,
+                       ncomp_t offset,
+                       const std::size_t ndof,
+                       const std::size_t rdof,
+                       const Fields& geoElem,
+                       const Fields& U,
+                       const Fields& P,
+                       std::size_t dof_el,
+                       const tk::real ct,
+                       std::vector< tk::real >& J,
+                       tk::Fields& rhs_si );
+
+//! Calculate equilibrium pressure and associated quantities
+void
+equilibriumPressure(ncomp_t system,
+  std::size_t nmat,
+  real ct,
+  real dx,
+  real apow,
+  std::vector< real >& u_gp,
+  std::vector< real >& p_gp,
+  std::vector< real >& kmat,
+  real& almax,
+  real& pb,
+  real& trelax,
+  real& p_relax);
 
 } // tk::
 

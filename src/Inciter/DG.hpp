@@ -194,6 +194,7 @@ class DG : public CBase_DG {
       p | m_geoElem;
       p | m_lhs;
       p | m_rhs;
+      p | m_src;
       p | m_nfac;
       p | m_nunk;
       p | m_ncoord;
@@ -265,6 +266,8 @@ class DG : public CBase_DG {
     tk::Fields m_lhs;
     //! Vector of right-hand side
     std::array< tk::Fields, m_rkstages-1 > m_rhs;
+    //! Vector of physical source terms
+    std::array< tk::Fields, m_rkstages-1 > m_src;
     //! Counter for number of faces on this chare (including chare boundaries)
     std::size_t m_nfac;
     //! Counter for number of unknowns on this chare (including ghosts)

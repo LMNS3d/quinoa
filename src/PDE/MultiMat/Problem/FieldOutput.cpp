@@ -37,6 +37,8 @@ MultiMatFieldNames( std::size_t nmat )
   for (std::size_t k=0; k<nmat; ++k)
     n.push_back( "pressure"+std::to_string(k+1)+"_numerical" );
   n.push_back( "pressure_numerical" );
+  for (std::size_t k=0; k<nmat; ++k)
+    n.push_back( "total_energy_density"+std::to_string(k+1)+"_numerical" );
   n.push_back( "total_energy_density_numerical" );
 
   return n;
@@ -71,7 +73,7 @@ MultiMatFieldOutput(
   // - 1 bulk total energy density
   // leading to a size of 3*nmat+6
   std::vector< std::vector< tk::real > >
-    out( 3*nmat+6, std::vector< tk::real >( U.nunk(), 0.0 ) );
+    out( 4*nmat+6, std::vector< tk::real >( U.nunk(), 0.0 ) );
 
   //// mesh node coordinates
   //const auto& x = coord[0];
@@ -119,10 +121,16 @@ MultiMatFieldOutput(
       out[3*nmat+4][i] += P(i, pressureDofIdx(nmat, k, rdof, 0), offset);
   }
 
+  // material total energy
+  for (std::size_t i=0; i<U.nunk(); ++i) {
+    for (std::size_t k=0; k<nmat; ++k)
+      out[3*nmat+5+k][i] = U(i, energyDofIdx(nmat, k, rdof, 0), offset);
+  }
+
   // bulk total energy density
   for (std::size_t i=0; i<U.nunk(); ++i) {
     for (std::size_t k=0; k<nmat; ++k)
-      out[3*nmat+5][i] += U(i, energyDofIdx(nmat, k, rdof, 0), offset );
+      out[4*nmat+5][i] += U(i, energyDofIdx(nmat, k, rdof, 0), offset );
   }
 
   return out;

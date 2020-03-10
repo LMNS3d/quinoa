@@ -114,12 +114,12 @@ class Transport {
       tk::mass( m_ncomp, m_offset, ndof, geoElem, l );
     }
 
-    //! Update the primitives for this PDE system
+    //! Update the primitives for given element for this PDE system
     //! \details This function computes and stores the dofs for primitive
     //!   quantities, which are currently unused for transport.
-    void updatePrimitives( const tk::Fields&,
-                           tk::Fields&,
-                           std::size_t ) const {}
+    void updatePrimitives( std::size_t,
+                           const tk::Fields&,
+                           tk::Fields& ) const {}
 
     //! Clean up the state of trace materials for this PDE system
     //! \details This function cleans up the state of materials present in trace
@@ -277,6 +277,41 @@ class Transport {
           geoFace, inpoel, coord, t, Upwind::flux, Problem::prescribedVelocity,
           b.second, U, P, ndofel, R, riemannDeriv );
     }
+
+    //! Compute physical source terms
+//    //! \param[in] geoElem Element geometry array
+//    //! \param[in] U Solution vector at recent time step
+//    //! \param[in] P Primitive vector at recent time step
+//    //! \param[in] ndofel Vector of local number of degrees of freedome
+//    //! \param[in,out] S Physical source term vector computed
+    //! \details This function computes and stores the physical source terms,
+    //!   and is currently unused for transport.
+    void phy_src( const tk::Fields& /*geoElem*/,
+                  const tk::Fields& /*U*/,
+                  const tk::Fields& /*P*/,
+                  const std::vector< std::size_t >& /*ndofel*/,
+                  tk::Fields& /*S*/ ) const {}
+
+    //! Compute Jacobian of physical source terms
+//    //! \param[in] e Element for which Jacobian is to be computed
+//    //! \param[in] geoElem Element geometry array
+//    //! \param[in] U Solution vector at recent time step
+//    //! \param[in] P Primitive vector at recent time step
+//    //! \param[in] ndofel Vector of local number of degrees of freedome
+//    //! \param[in,out] J Physical source term Jacobian
+    //! \details This function computes and stores the Jacobian for physical
+    //!   source terms, and is currently unused for transport.
+    void src_Jacobians( std::size_t /*e*/,
+                        const tk::Fields& /*geoElem*/,
+                        const tk::Fields& /*U*/,
+                        const tk::Fields& /*P*/,
+                        const std::vector< std::size_t >& /*ndofel*/,
+                        std::vector< tk::real >& /*J*/,
+                        tk::Fields& /*rhs_si*/ ) const {}
+
+    void semi_impl(std::size_t /*e*/,
+      tk::Fields& /*rhs_si*/,
+      const tk::Fields& /*U*/) const { }
 
     //! Compute the minimum time step size
 //     //! \param[in] U Solution vector at recent time step

@@ -41,7 +41,7 @@ static const tk::real grk = 1.0 - 1.0/std::sqrt(2.0);
 static const std::array< std::array< tk::real, 3 >, 4 >
   rkcoef{{ {{ 0.0, 0.0, 0.0 }}, {{ 1.0, 0.0, 0.0 }}, {{ 1.0/4.0, 1.0/4.0, 0.0 }},
     {{ 1.0/6.0, 1.0/6.0, 2.0/3.0 }} }},
-  dirkcoeff{{ {{ grk, 0.0, 0.0 }}, {{ 1.0-2.0*grk, grk, 0.0 }},
+  dirkcoef{{ {{ grk, 0.0, 0.0 }}, {{ 1.0-2.0*grk, grk, 0.0 }},
     {{ 0.5-grk, 0.0, grk }}, {{ 1.0/6.0, 1.0/6.0, 2.0/3.0 }} }};
 
 } // inciter::
@@ -74,6 +74,7 @@ DG::DG( const CProxy_Discretization& disc,
          g_inputdeck.get< tag::discr, tag::ndof >()*
          g_inputdeck.get< tag::component >().nprop() ),
   m_rhs(),
+  m_src(),
   m_nfac( m_fd.Inpofa().size()/3 ),
   m_nunk( m_u.nunk() ),
   m_ncoord( Disc()->Coord()[0].size() ),
@@ -100,7 +101,10 @@ DG::DG( const CProxy_Discretization& disc,
 // *****************************************************************************
 {
   for (std::size_t i=0; i<m_rkstages-1; ++i)
+  {
     m_rhs[i] = tk::Fields( m_u.nunk(), m_lhs.nprop() );
+    m_src[i] = tk::Fields( m_u.nunk(), m_lhs.nprop() );
+  }
 
   usesAtSync = true;    // enable migration at AtSync
 
@@ -920,7 +924,10 @@ DG::adj()
   m_p.resize( m_nunk );
   m_lhs.resize( m_nunk );
   for (std::size_t i=0; i<m_rkstages-1; ++i)
+  {
     m_rhs[i].resize( m_nunk );
+    m_src[i].resize( m_nunk );
+  }
 
   // Create a mapping between local ghost tet ids and zero-based boundary ids
   std::vector< std::size_t > c( tk::sumvalsize( m_ghost ) );
@@ -1018,7 +1025,8 @@ DG::setup()
   {
     eq.initialize( m_lhs, d->Inpoel(), d->Coord(), m_u, d->T(),
                    m_fd.Esuel().size()/4 );
-    eq.updatePrimitives( m_u, m_p, m_fd.Esuel().size()/4 );
+    for (std::size_t e=0; e<m_fd.Esuel().size()/4; ++e)
+      eq.updatePrimitives( e, m_u, m_p );
   }
 
   // Compute volume of user-defined box IC
@@ -1594,37 +1602,111 @@ DG::solve( tk::real newdt )
   // Update Un
   if (m_stage == 0) m_un = m_u;
 
+  // Compute RHS and physical source terms for this stage
   if (m_stage > 0)
   {
     for (const auto& eq : g_dgpde)
+    {
       eq.rhs( d->T(), m_geoFace, m_geoElem, m_fd, d->Inpoel(), d->Coord(), m_u,
               m_p, m_ndof, m_rhs[m_stage-1] );
+
+      eq.phy_src( m_geoElem, m_u, m_p, m_ndof, m_src[m_stage-1] );
+    }
   }
 
-  // initialize U to Un for RK-update
-  m_u = m_un;
+  // local storage
+  std::vector< tk::real > jac(m_lhs.nprop(), 0.0), du(m_lhs.nprop(), 0.0);
+  tk::Fields rhs_semiimpl(1, m_lhs.nprop()), Rexp(1, m_lhs.nprop());
 
-  // Explicit RK update of U
-  if (m_stage > 0)
-    for(std::size_t s=0; s<m_stage; ++s)
+  // IMEX-RK update of U
+  // --------------------------------------------------------------------------
+  for(std::size_t e=0; e<m_nunk; ++e)
+  {
+    // 1. Explicit part of the RK-stage: Compute cumulative RHS, as required by
+    //    the RK-stage, using previously computed explicit RHS's.
+
+    for(std::size_t c=0; c<neq; ++c)
     {
-      for(std::size_t e=0; e<m_nunk; ++e)
-        for(std::size_t c=0; c<neq; ++c)
-          for (std::size_t k=0; k<ndof; ++k)
-          {
-            auto rmark = c*rdof+k;
-            auto mark = c*ndof+k;
-            m_u(e, rmark, 0) += rkcoef[m_stage][s] * d->Dt()
-              * m_rhs[s](e, mark, 0)/m_lhs(e,mark,0);
-          }
+      for (std::size_t k=0; k<ndof; ++k)
+      {
+        auto rmark = c*rdof+k;
+        auto mark = c*ndof+k;
+
+        // Cumulative explicit RHS contributions to update
+        Rexp(0, mark, 0) = m_lhs(e, mark, 0) * m_un(e, rmark, 0);
+
+        for(std::size_t s=0; s<m_stage; ++s)
+          Rexp(0, mark, 0) += d->Dt() * (rkcoef[m_stage][s]*m_rhs[s](e, mark, 0)
+            + dirkcoef[m_stage][s]*m_src[s](e, mark, 0));
+      }
     }
 
-  // Update primitives based on the evolved solution
-  for (const auto& eq : g_dgpde)
-  {
-    eq.updatePrimitives( m_u, m_p, m_fd.Esuel().size()/4 );
-    eq.cleanTraceMaterial( m_geoElem, m_u, m_p, m_fd.Esuel().size()/4 );
+    // 2. Implicit part of the RK-stage:
+    // a) Compute implicit RHS and Jacobian using previous-stage solution U(s-1)
+    // b) Use computed implicit RHS and Jacobian, for implicit evolution of U(s)
+    //    Since a coarse approximation has been made that causes only the
+    //    volume-fraction to be implicit, subcycling is required. It is
+    //    important to note that in every subcycle, the volume-fraction has to
+    //    be updated first, followed by the material energy.
+
+    for (std::size_t subcycle=0; subcycle<1; ++subcycle)
+    {
+      if (m_stage < m_rkstages-1)
+      {
+        // Update implicit RHS and Jacobian
+        for (const auto& eq : g_dgpde)
+          eq.src_Jacobians(e, m_geoElem, m_u, m_p, m_ndof, jac, rhs_semiimpl);
+        Assert(jac.size() == m_lhs.nprop(), "Size mismatch for Jacobian vector");
+
+        // ideally the following term (resulting as an explicit term in energy
+        // due to the above mentioned approximation) should be calculated after
+        // the volume-fraction is updated. However, since subcycling is used
+        // anyway, this term is calculated using the volume-fraction of previous
+        // subcycle.
+        for (const auto& eq : g_dgpde)
+          eq.semi_impl(e, rhs_semiimpl, m_u);
+      }
+
+      for (std::size_t c=0; c<neq; ++c)
+      {
+        for (std::size_t k=0; k<ndof; ++k)
+        {
+          auto rmark = c*rdof+k;
+          auto mark = c*ndof+k;
+
+          // Invert (lhs-J) for stage-update of U
+          if (m_stage == m_rkstages-1)
+          {
+            // final update-stage
+            m_u(e, rmark, 0) = Rexp(0, mark, 0) / m_lhs(e, mark, 0);
+          }
+          else
+          {
+            // intermediate IMEX RK-stage
+            du[mark] = (-m_lhs(e, mark, 0) * m_u(e, rmark, 0)
+              + Rexp(0, mark, 0)
+              + d->Dt() * dirkcoef[m_stage][m_stage] * rhs_semiimpl(0, mark, 0))
+              / (m_lhs(e, mark, 0)
+              - d->Dt() * dirkcoef[m_stage][m_stage] * jac[mark]);
+            m_u(e, rmark, 0) += du[mark];
+          }
+        }
+      }
+
+      // Update primitives based on the evolved solution
+      if (e < m_fd.Esuel().size()/4)
+        for (const auto& eq : g_dgpde) eq.updatePrimitives( e, m_u, m_p );
+
+      // if final update-stage of RK, no sub-cycling needed
+      if (m_stage == m_rkstages-1) break;
+    }
   }
+  // IMEX-RK update of U complete
+  // --------------------------------------------------------------------------
+
+  // Cleanup trace material state
+  for (const auto& eq : g_dgpde)
+    eq.cleanTraceMaterial( m_geoElem, m_u, m_p, m_fd.Esuel().size()/4 );
 
   if (m_stage < m_rkstages-1) {
 
@@ -1720,7 +1802,10 @@ DG::resizePostAMR(
   m_lhs.resize( nelem, nprop );
 
   for (std::size_t i=0; i<m_rkstages-1; ++i)
+  {
     m_rhs[i].resize( nelem, nprop );
+    m_src[i].resize( nelem, nprop );
+  }
 
   m_fd = FaceData( d->Inpoel(), bface, tk::remap(triinpoel,d->Lid()) );
 

@@ -138,10 +138,10 @@ class DGPDE {
     { self->lhs( geoElem, l ); }
 
     //! Public interface to updating the primitives for the diff eq
-    void updatePrimitives( const tk::Fields& unk,
-                           tk::Fields& prim,
-                           std::size_t nielem ) const
-    { self->updatePrimitives( unk, prim, nielem ); }
+    void updatePrimitives( std::size_t e,
+                           const tk::Fields& unk,
+                           tk::Fields& prim ) const
+    { self->updatePrimitives( e, unk, prim ); }
 
     //! Public interface to cleaning up trace materials for the diff eq
     void cleanTraceMaterial( const tk::Fields& geoElem,
@@ -190,6 +190,36 @@ class DGPDE {
               tk::Fields& R ) const
     {
       self->rhs( t, geoFace, geoElem, fd, inpoel, coord, U, P, ndofel, R );
+    }
+
+    //! Public interface to computing the P1 source term vector
+    void phy_src( const tk::Fields& geoElem,
+                  const tk::Fields& U,
+                  const tk::Fields& P,
+                  const std::vector< std::size_t >& ndofel,
+                  tk::Fields& S ) const
+    {
+      self->phy_src( geoElem, U, P, ndofel, S );
+    }
+
+    //! Public interface to computing the P1 Jacobian of the source term vector
+    void src_Jacobians( std::size_t e,
+                        const tk::Fields& geoElem,
+                        const tk::Fields& U,
+                        const tk::Fields& P,
+                        const std::vector< std::size_t >& ndofel,
+                        std::vector< tk::real >& J,
+                        tk::Fields& rhs_si ) const
+    {
+      self->src_Jacobians( e, geoElem, U, P, ndofel, J, rhs_si );
+    }
+
+    //! Public interface to computing the P1 Jacobian of the source term vector
+    void semi_impl( std::size_t e,
+                    tk::Fields& rhs_si,
+                    const tk::Fields& U ) const
+    {
+      self->semi_impl( e, rhs_si, U );
     }
 
     //! Public interface for computing the minimum time step size
@@ -263,9 +293,9 @@ class DGPDE {
                                tk::real,
                                const std::size_t nielem ) const = 0;
       virtual void lhs( const tk::Fields&, tk::Fields& ) const = 0;
-      virtual void updatePrimitives( const tk::Fields&,
-                                     tk::Fields&,
-                                     std::size_t ) const = 0;
+      virtual void updatePrimitives( std::size_t,
+                                     const tk::Fields&,
+                                     tk::Fields& ) const = 0;
       virtual void cleanTraceMaterial( const tk::Fields&,
                                        tk::Fields&,
                                        tk::Fields&,
@@ -297,6 +327,21 @@ class DGPDE {
                         const tk::Fields&,
                         const std::vector< std::size_t >&,
                         tk::Fields& ) const = 0;
+      virtual void phy_src( const tk::Fields&,
+                            const tk::Fields&,
+                            const tk::Fields&,
+                            const std::vector< std::size_t >&,
+                            tk::Fields& ) const = 0;
+      virtual void src_Jacobians( std::size_t,
+                                  const tk::Fields&,
+                                  const tk::Fields&,
+                                  const tk::Fields&,
+                                  const std::vector< std::size_t >&,
+                                  std::vector< tk::real >&,
+                                  tk::Fields& ) const = 0;
+      virtual void semi_impl( std::size_t,
+                              tk::Fields&,
+                              const tk::Fields& ) const = 0;
       virtual tk::real dt( const std::array< std::vector< tk::real >, 3 >&,
                            const std::vector< std::size_t >&,
                            const inciter::FaceData&,
@@ -342,10 +387,10 @@ class DGPDE {
       const override { data.initialize( L, inpoel, coord, unk, t, nielem ); }
       void lhs( const tk::Fields& geoElem, tk::Fields& l ) const override
       { data.lhs( geoElem, l ); }
-      void updatePrimitives( const tk::Fields& unk,
-                             tk::Fields& prim,
-                             std::size_t nielem )
-      const override { data.updatePrimitives( unk, prim, nielem ); }
+      void updatePrimitives( std::size_t e,
+                             const tk::Fields& unk,
+                             tk::Fields& prim )
+      const override { data.updatePrimitives( e, unk, prim ); }
       void cleanTraceMaterial( const tk::Fields& geoElem,
                                tk::Fields& unk,
                                tk::Fields& prim,
@@ -386,6 +431,30 @@ class DGPDE {
                 tk::Fields& R ) const override
       {
         data.rhs( t, geoFace, geoElem, fd, inpoel, coord, U, P, ndofel, R );
+      }
+      void phy_src( const tk::Fields& geoElem,
+                    const tk::Fields& U,
+                    const tk::Fields& P,
+                    const std::vector< std::size_t >& ndofel,
+                    tk::Fields& S ) const override
+      {
+        data.phy_src( geoElem, U, P, ndofel, S );
+      }
+      void src_Jacobians( std::size_t e,
+                          const tk::Fields& geoElem,
+                          const tk::Fields& U,
+                          const tk::Fields& P,
+                          const std::vector< std::size_t >& ndofel,
+                          std::vector< tk::real >& J,
+                          tk::Fields& rhs_si ) const override
+      {
+        data.src_Jacobians( e, geoElem, U, P, ndofel, J, rhs_si );
+      }
+      void semi_impl( std::size_t e,
+                      tk::Fields& rhs_si,
+                      const tk::Fields& U ) const override
+      {
+        data.semi_impl( e, rhs_si, U );
       }
       tk::real dt( const std::array< std::vector< tk::real >, 3 >& coord,
                    const std::vector< std::size_t >& inpoel,

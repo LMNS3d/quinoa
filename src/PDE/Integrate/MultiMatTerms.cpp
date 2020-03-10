@@ -304,67 +304,18 @@ pressureRelaxationInt( ncomp_t system,
       auto ugp = eval_state( ncomp, offset, rdof, dof_el, e, U, B );
       auto pgp = eval_state( nprim, offset, rdof, dof_el, e, P, B );
 
-      auto al_eps = 1.0e-12;
-
-      // get majority material, and correct trace materials
-      std::size_t kmax(0);
-      real almax(0.0), al_corr(0.0),
-        rmin(std::numeric_limits< tk::real >::max()),
-        rmax(std::numeric_limits< tk::real >::min());
-      for (std::size_t k=0; k<nmat; ++k)
-      {
-        const auto al = ugp[volfracIdx(nmat, k)];
-        rmin = std::min(rmin, ugp[densityIdx(nmat, k)]/al);
-        rmax = std::max(rmax, ugp[densityIdx(nmat, k)]/al);
-
-        if (al > almax)
-        {
-          almax = al;
-          kmax = k;
-        }
-
-        if (al < al_eps)
-        {
-          al_corr -= al_eps - al;
-          ugp[volfracIdx(nmat, k)] = al_eps;
-          ugp[densityIdx(nmat, k)] *= al_eps/al;
-          pgp[pressureIdx(nmat, k)] *= al_eps/al;
-        }
-      }
-
-      ugp[volfracIdx(nmat, kmax)] += al_corr;
-      ugp[densityIdx(nmat, kmax)] *= ugp[volfracIdx(nmat, kmax)]/almax;
-      pgp[pressureIdx(nmat, kmax)] *= ugp[volfracIdx(nmat, kmax)]/almax;
-      almax = ugp[volfracIdx(nmat, kmax)];
-
-      auto rhoratio = 1.0; //rmin/rmax;
-      auto apow = 1.0;
-
-      // get pressures and bulk modulii
-      real pb(0.0), nume(0.0), deno(0.0), trelax(0.0);
-      std::vector< real > apmat(nmat, 0.0), kmat(nmat, 0.0);
-      for (std::size_t k=0; k<nmat; ++k)
-      {
-        real arhomat = ugp[densityIdx(nmat, k)];
-        real alphamat = ugp[volfracIdx(nmat, k)];
-        apmat[k] = pgp[pressureIdx(nmat, k)];
-        real amat = inciter::eos_soundspeed< tag::multimat >( system, arhomat,
-          apmat[k], alphamat, k );
-        kmat[k] = arhomat * amat * amat;
-        pb += apmat[k];
-
-        // relaxation parameters
-        trelax = std::max(trelax, ct*rhoratio*dx/amat);
-        nume += std::pow(alphamat, apow) * apmat[k] / kmat[k];
-        deno += std::pow(alphamat, apow+1.0) / kmat[k];
-      }
-      auto p_relax = nume/deno;
+      // calculate equilibrium pressure and builk-modulii
+      std::vector< real > kmat(nmat, 0.0);
+      real apow(1.0), almax(0.0), pb(0.0), trelax(0.0), p_relax(0.0);
+      equilibriumPressure(system, nmat, ct, dx, apow, ugp, pgp, kmat, almax, pb,
+        trelax, p_relax);
 
       // compute pressure relaxation terms
       std::vector< real > s_prelax(ncomp, 0.0);
       for (std::size_t k=0; k<nmat; ++k)
       {
-        auto s_alpha = (apmat[k]-p_relax*ugp[volfracIdx(nmat, k)])
+        auto s_alpha = (pgp[pressureIdx(nmat, k)]
+          -p_relax*ugp[volfracIdx(nmat, k)])
           * std::pow(ugp[volfracIdx(nmat, k)], apow)
           * std::pow(almax, 1.0-apow) / (trelax*kmat[k]);
         s_prelax[volfracIdx(nmat, k)] = s_alpha;
@@ -374,6 +325,201 @@ pressureRelaxationInt( ncomp_t system,
       update_rhs_ncn( ncomp, offset, ndof, ndofel[e], wt, e, dBdx, s_prelax, R );
     }
   }
+}
+
+void
+pressureRelaxationJac( ncomp_t system,
+                       std::size_t nmat,
+                       std::size_t e,
+                       ncomp_t offset,
+                       const std::size_t ndof,
+                       const std::size_t rdof,
+                       const Fields& geoElem,
+                       const Fields& U,
+                       const Fields& P,
+                       std::size_t dof_el,
+                       const tk::real ct,
+                       std::vector< tk::real >& J,
+                       tk::Fields& rhs_si )
+// *****************************************************************************
+//  Compute element Jacobian of pressure relaxation terms in multi-material DG
+//! \details This is called for multi-material DG to compute Jacobian of
+//!   finite pressure relaxation terms in the volume fraction and energy
+//!   equations, which do not exist in the single-material flow formulation (for
+//!   `CompFlow` DG).
+//! \param[in] system Equation system index
+//! \param[in] nmat Number of materials in this PDE system
+//! \param[in] e Element whose Jacobian is to be computed
+//! \param[in] offset Offset this PDE system operates from
+//! \param[in] ndof Maximum number of degrees of freedom
+//! \param[in] rdof Maximum number of reconstructed degrees of freedom
+//! \param[in] geoElem Element geometry array
+//! \param[in] U Solution vector at recent time step
+//! \param[in] P Vector of primitive quantities at recent time step
+//! \param[in] dof_el Local number of degrees of freedom
+//! \param[in] ct Pressure relaxation time-scale for this system
+//! \param[in,out] J Jacobian vector computed
+//! \param[in,out] rhs_si Semi-implicit RHS vector computed
+// *****************************************************************************
+{
+  using inciter::volfracIdx;
+  using inciter::volfracDofIdx;
+  using inciter::energyDofIdx;
+  using inciter::pressureIdx;
+
+  auto ncomp = U.nprop()/rdof;
+  auto nprim = P.nprop()/rdof;
+
+  Assert( J.size() == ncomp*ndof, "Size mismatch for Jacobian vector" );
+
+  auto dx = std::cbrt(geoElem(e, 0, 0));
+  auto ng = NGvol(dof_el);
+
+  // arrays for quadrature points
+  std::array< std::vector< real >, 3 > coordgp;
+  std::vector< real > wgp;
+
+  coordgp[0].resize( ng );
+  coordgp[1].resize( ng );
+  coordgp[2].resize( ng );
+  wgp.resize( ng );
+
+  GaussQuadratureTet( ng, coordgp, wgp );
+
+  // Gaussian quadrature
+  for (std::size_t igp=0; igp<ng; ++igp)
+  {
+    // Compute the basis function
+    auto B =
+      eval_basis( dof_el, coordgp[0][igp], coordgp[1][igp], coordgp[2][igp] );
+
+    auto wt = wgp[igp] * geoElem(e, 0, 0);
+
+    auto ugp = eval_state( ncomp, offset, rdof, dof_el, e, U, B );
+    auto pgp = eval_state( nprim, offset, rdof, dof_el, e, P, B );
+
+    // calculate equilibrium pressure and builk-modulii
+    std::vector< real > kmat(nmat, 0.0);
+    real apow(1.0), almax(0.0), pb(0.0), trelax(0.0), p_relax(0.0);
+    equilibriumPressure(system, nmat, ct, dx, apow, ugp, pgp, kmat, almax, pb,
+      trelax, p_relax);
+
+    real deno = 0.0;
+    for (std::size_t k=0; k<nmat; ++k)
+      deno += ugp[volfracIdx(nmat, k)]/kmat[k];
+
+    // compute pressure relaxation Jacobian terms
+    for (std::size_t k=0; k<nmat; ++k)
+    {
+      auto gk =
+        inciter::g_inputdeck.get< tag::param, tag::multimat, tag::gamma >()[ system ][k];
+      auto dsda = (pgp[pressureIdx(nmat,k)] - p_relax*ugp[volfracIdx(nmat, k)])
+        / (trelax*kmat[k]);
+      auto dsdE = -((gk - 1.0) - ((gk-1.0)*ugp[volfracIdx(nmat, k)]/kmat[k])/deno)
+        * pb * ugp[volfracIdx(nmat, k)]/(trelax*kmat[k]);
+
+      J[volfracDofIdx(nmat, k, ndof, 0)] += wt * dsda;
+      J[energyDofIdx(nmat, k, ndof, 0)] += wt * dsdE;
+      rhs_si(0, volfracDofIdx(nmat, k, ndof, 0), offset) += wt * dsda;
+      rhs_si(0, energyDofIdx(nmat, k, ndof, 0), offset) -= wt * dsda * pb;
+    }
+  }
+}
+
+void equilibriumPressure(ncomp_t system,
+  std::size_t nmat,
+  real ct,
+  real dx,
+  real apow,
+  std::vector< real >& u_gp,
+  std::vector< real >& p_gp,
+  std::vector< real >& kmat,
+  real& almax,
+  real& pb,
+  real& trelax,
+  real& p_relax)
+// *****************************************************************************
+//  Calculate equilibrium pressure and associated quantities at quadrature point
+//! \details This function calculates equilibrium pressure between materials in
+//!   the cell, and associated quantities required for the pressure relaxation
+//!   term.
+//! \param[in] system Equation system index
+//! \param[in] nmat Number of materials in this PDE system
+//! \param[in] ct Pressure relaxation time-scale for this system
+//! \param[in] dx Characteristic length scale for pressure relaxation
+//! \param[in] apow Power for volume-fraction in relaxation term
+//! \param[in,out] u_gp Reconstructed solution at quadrature point
+//! \param[in,out] p_gp Reconstructed primitive quantities at quadrature point
+//! \param[in,out] kmat Vector of material bulk-modulii
+//! \param[in,out] almax Maximum volume-fraction at quadrature point
+//! \param[in,out] pb Bulk pressure
+//! \param[in,out] trelax Relaxation time
+//! \param[in,out] p_relax Expected equilibrium pressure
+// *****************************************************************************
+{
+  using inciter::volfracIdx;
+  using inciter::densityIdx;
+  using inciter::momentumIdx;
+  using inciter::energyIdx;
+  using inciter::pressureIdx;
+  using inciter::velocityIdx;
+
+  auto al_eps = 1.0e-12;
+
+  // get majority material, and correct trace materials
+  std::size_t kmax(0);
+  real al_corr(0.0),
+    rmin(std::numeric_limits< real >::max()),
+    rmax(std::numeric_limits< real >::min());
+  almax = 0.0;
+  for (std::size_t k=0; k<nmat; ++k)
+  {
+    const auto al = u_gp[volfracIdx(nmat, k)];
+    rmin = std::min(rmin, u_gp[densityIdx(nmat, k)]/al);
+    rmax = std::max(rmax, u_gp[densityIdx(nmat, k)]/al);
+
+    if (al > almax)
+    {
+      almax = al;
+      kmax = k;
+    }
+
+    if (al < al_eps)
+    {
+      al_corr -= al_eps - al;
+      u_gp[volfracIdx(nmat, k)] = al_eps;
+      u_gp[densityIdx(nmat, k)] *= al_eps/al;
+      p_gp[pressureIdx(nmat, k)] *= al_eps/al;
+    }
+  }
+
+  u_gp[volfracIdx(nmat, kmax)] += al_corr;
+  u_gp[densityIdx(nmat, kmax)] *= u_gp[volfracIdx(nmat, kmax)]/almax;
+  p_gp[pressureIdx(nmat, kmax)] *= u_gp[volfracIdx(nmat, kmax)]/almax;
+  almax = u_gp[volfracIdx(nmat, kmax)];
+
+  auto rhoratio = 1.0; //rmin/rmax;
+
+  // get pressures and bulk modulii
+  real nume(0.0), deno(0.0);
+  std::vector< real > apmat(nmat, 0.0);
+  pb = 0.0;
+  for (std::size_t k=0; k<nmat; ++k)
+  {
+    real arhomat = u_gp[densityIdx(nmat, k)];
+    real alphamat = u_gp[volfracIdx(nmat, k)];
+    apmat[k] = p_gp[pressureIdx(nmat, k)];
+    real amat = inciter::eos_soundspeed< tag::multimat >( system, arhomat,
+      apmat[k], alphamat, k );
+    kmat[k] = arhomat * amat * amat;
+    pb += apmat[k];
+
+    // relaxation parameters
+    trelax = std::max(trelax, ct*rhoratio*dx/amat);
+    nume += std::pow(alphamat, apow) * apmat[k] / kmat[k];
+    deno += std::pow(alphamat, apow+1.0) / kmat[k];
+  }
+  p_relax = nume/deno;
 }
 
 }// tk::
